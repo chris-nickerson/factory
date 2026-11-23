@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Factory command line."""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+if os.name != "posix":
+    sys.exit("Software Factory requires a POSIX environment. Use macOS or Linux.")
+if sys.version_info < (3, 11):
+    sys.exit("Software Factory needs Python 3.11 or later")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from workspace import inspect, repo_root
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Discover a checkout, capture verification, and coordinate engineering work."
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="software-factory 0.1.0 (local evidence schema 1)",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    scan = sub.add_parser(
+        "inspect",
+        help="Read repository evidence and command candidates without executing project code",
+    )
+    scan.add_argument("--repo", default=".")
+    scan.add_argument(
+        "--path",
+        action="append",
+        default=[],
+        help="Affected path, relative to the checkout root",
+    )
+
+    def discover(args):
+        location = Path(args.repo).resolve()
+        root = repo_root(location)
+        return inspect(root, [location.relative_to(root), *args.path]), 0
+
+    scan.set_defaults(action=discover)
+    import doctor
+    import evidence
+
+    doctor.register(sub)
+
+    evidence.register(sub)
+    import dialogue
+    import rounds
+
+    dialogue.register(sub)
+    rounds.register(sub)
+    args = parser.parse_args()
+    try:
+        if hasattr(args, "action"):
+            report, code = args.action(args)
+            print(json.dumps(report, indent=2))
+            return code
+        return args.func(args)
+    except subprocess.CalledProcessError as exc:
+        message = exc.stderr or b""
+        if isinstance(message, bytes):
+            message = message.decode(errors="replace")
+        print(
+            json.dumps(dict(status="BLOCKED", error=message.strip() or str(exc))),
+            file=sys.stderr,
+        )
+    except (ValueError, OSError, RuntimeError, TypeError, KeyError) as exc:
+        print(json.dumps(dict(status="BLOCKED", error=str(exc))), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
