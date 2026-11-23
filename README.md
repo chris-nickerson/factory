@@ -1,6 +1,6 @@
 # Software Factory
 
-Software Factory is a portable agent skill and local CLI for evidence-backed engineering. An agent can discover a repository's commands, fix a defect, run independent acceptance checks, obtain a fresh GPT review, or coordinate a design discussion and three Opus simplification rounds. The run record tracks which revision each observation covers.
+Software Factory is a portable agent skill and local CLI for evidence-backed engineering. An agent can discover a repository's commands, fix a defect, run independent acceptance checks, obtain a fresh GPT review, or coordinate a design discussion and size-based Opus simplification rounds. The run record tracks which revision each observation covers.
 
 ## Start using it
 
@@ -25,7 +25,7 @@ For a Claude Code project, supply `--skill-dir /path/to/project/.claude/skills` 
 | Verify a change locally | `factory start --repo PATH --task TEXT --contract FILE`, then `factory check RUN_ID` | Frozen expectations and commands, captured output and a result per claim. [Contract example](skills/software-factory/references/local.md) |
 | Get an independent GPT review | Include `--require-review --base REF` at start, then `factory review RUN_ID` | Fresh read-only Codex review. Repeated `--path` at start limits its scope on a mixed branch. `factory status RUN_ID` rechecks evidence freshness. |
 | Argue a design or diagnosis | `factory consensus design --repo PATH --task TEXT` or `factory consensus diagnosis ...` | Independent GPT/Opus openings and a bounded dialogue. The final acknowledgment binds both agents to the same proposal. [Consensus and recovery](skills/software-factory/references/consensus.md) |
-| Run the three simplification rounds | `factory simplify --repo PATH --base REF --task TEXT --check 'make test'` | Three fresh Opus sessions with Auto editing, sandboxed shell and local tests. Factory runs independent checks, obtains a read-only assessment and owns Git checkpoints. Add `--push REMOTE` for per-round commit publication and remote head readback. [Three-round procedure](skills/software-factory/references/simplify.md) |
+| Simplify a nontrivial PR | `factory simplify --repo PATH --base REF --rounds N --task TEXT --check 'make test'` | One fresh Opus session for straightforward changes, two for moderate changes and three for large or high-risk changes, with Auto editing, sandboxed shell and local tests. Factory runs independent checks, obtains a read-only assessment and owns Git checkpoints. Add `--push REMOTE` for per-round commit publication and remote head readback. [Simplification procedure](skills/software-factory/references/simplify.md) |
 | Deliver a complete change | Ask a coordinating GPT agent to use the full delivery profile | Implementation, the selected collaboration phases, a fresh whole-change review and final behavioral verification. The coordinating agent drives repo-specific PR/CI work within the requested scope. [Delivery procedure](skills/software-factory/references/delivery.md) |
 
 Agent turns run until the provider returns, fails, or the coordinator is stopped. Factory keeps separate limits for verification commands and Git operations. The legacy `--timeout` on review and consensus and `--deadline` on consensus are accepted with a notice and ignored.

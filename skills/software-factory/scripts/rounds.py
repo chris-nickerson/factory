@@ -1,4 +1,4 @@
-"""Run three checkpointed simplification rounds in a clean Git worktree."""
+"""Run checkpointed simplification rounds in a clean Git worktree."""
 
 import hashlib
 import json
@@ -337,6 +337,8 @@ def create_run(args, repo):
         "timeout": args.timeout,
         "remote": args.push,
         "rounds": [],
+        "target_rounds": args.rounds or 3,
+        "commit_subject": args.commit_subject,
         "status": "active",
     }
     check_branch(s)
@@ -571,11 +573,13 @@ def check_candidate(s, r, folder):
     save(folder / "state.json", s)
 
 
-def commit(s, r, folder):
+def commit(s, r, folder, accepted_head=None):
     repo = s["repo"]
     head = rev(repo, "HEAD")
     checked = r["tree"]
-    expected = f"Factory simplify round {r['number']} [{s['id']}]"
+    committed_here = False
+    marker = f"Factory simplify round {r['number']} [{s['id']}]"
+    subject = s.get("commit_subject") or marker
     if head == r["input"]:
         current, paths = candidate(s, folder)
         if current != checked:
@@ -586,15 +590,21 @@ def commit(s, r, folder):
             stage(repo, paths)
             if os.fsdecode(git(repo, "write-tree")).strip() != checked:
                 raise Pending("Staged tree differs from the checked candidate.")
-            git(repo, "commit", "-m", expected)
+            cleanup = ["--cleanup=verbatim"] if s.get("commit_subject") else []
+            git(repo, "commit", *cleanup, "-m", subject)
+            committed_here = True
     check_branch(s)
     # This also recovers a kill between committing and persisting the result.
     if rev(repo, "HEAD") != r["input"]:
-        actual = os.fsdecode(git(repo, "log", "-1", "--format=%s")).rstrip("\n")
+        lines = os.fsdecode(git(repo, "log", "-1", "--format=%B")).splitlines()
         parents = os.fsdecode(git(repo, "show", "-s", "--format=%P", "HEAD")).strip()
-        if parents != r["input"] or actual != expected:
+        marked = marker in lines or bool(lines and lines[0].endswith(" " + marker))
+        if parents != r["input"]:
+            raise Pending("Checkpoint parent differs from the checked input. Inspect the branch.")
+        if not (committed_here or marked or accepted_head == rev(repo, "HEAD")):
             raise Pending(
-                "HEAD differs from the intended checkpoint commit. Inspect the branch before continuing."
+                "Checkpoint has no run marker. Inspect the commit, then resume with "
+                "--accept-checkpoint FULL_SHA if it is the intended checkpoint."
             )
     if changed(s) or rev(repo, "HEAD^{tree}") != checked:
         raise Pending(
@@ -604,7 +614,7 @@ def commit(s, r, folder):
     save(folder / "state.json", s)
 
 
-def execute(s, folder, recover=False):
+def execute(s, folder, recover=False, accepted_head=None):
     prompt_bytes = (folder / "prompt.txt").read_bytes()
     if digest(prompt_bytes) != s["prompt_sha256"]:
         raise Pending("The pinned simplification prompt has changed.")
@@ -615,7 +625,7 @@ def execute(s, folder, recover=False):
             previous = s["rounds"][-1]["output"] if s["rounds"] else s["start"]
             if rev(s["repo"], "HEAD") != previous or changed(s):
                 raise Pending("The worktree no longer matches the last checkpoint.")
-            if len(s["rounds"]) == 3:
+            if len(s["rounds"]) == s.get("target_rounds", 3):
                 s["status"] = "complete"
                 save(folder / "state.json", s)
                 return
@@ -663,7 +673,8 @@ def execute(s, folder, recover=False):
                 "",
             )
         elif phase == "commit":
-            commit(s, r, folder)
+            commit(s, r, folder, accepted_head)
+            accepted_head = None
         elif phase == "publish":
             if rev(s["repo"], "HEAD") != r["output"] or changed(s):
                 raise Pending(
@@ -690,6 +701,7 @@ def report(s, folder):
         "branch": s["branch"],
         "profile": s["profile"],
         "state": str(folder / "state.json"),
+        "target_rounds": s.get("target_rounds", 3),
         "rounds": [
             {
                 k: r[k]
@@ -739,9 +751,23 @@ def emit_status(s, folder):
 def handle(args):
     folder = None
     try:
+        subject = args.commit_subject
+        if subject is not None and (
+            len(subject.splitlines()) != 1 or subject != subject.strip()
+        ):
+            raise Pending("--commit-subject must be a single nonempty trimmed line.")
+        if args.accept_checkpoint is not None:
+            sha = args.accept_checkpoint
+            if len(sha) not in (40, 64) or any(c not in "0123456789abcdef" for c in sha):
+                raise Pending("--accept-checkpoint requires a full lowercase hexadecimal commit SHA.")
         if args.resume:
+            if args.accept_checkpoint and (args.status or args.release or args.commit_subject is not None):
+                raise Pending("Use --accept-checkpoint only to reconcile an existing commit.")
+            if args.commit_subject is not None and not args.recover:
+                raise Pending("Changing a rejected checkpoint subject requires --recover.")
             if any(
-                (args.repo, args.base, args.task, args.check, args.allow, args.push)
+                (args.repo, args.base, args.task, args.check, args.allow,
+                 args.push, args.rounds)
             ):
                 raise Pending(
                     "A resumed run uses its saved contract, commands and publication target."
@@ -752,7 +778,7 @@ def handle(args):
                 return emit_status(s, folder)
             repo = Path(s["repo"])
         else:
-            if args.recover or args.release or args.status:
+            if args.recover or args.release or args.status or args.accept_checkpoint:
                 raise Pending("--recover, --release and --status need --resume RUN_ID.")
             repo = Path(
                 os.fsdecode(
@@ -781,9 +807,23 @@ def handle(args):
                     print(json.dumps(report(s, folder)))
                     return 2
                 qualify_legacy_checkouts(s)
+                if args.accept_checkpoint:
+                    current = s["rounds"][-1] if s["rounds"] else {}
+                    head = rev(repo, "HEAD")
+                    if (current.get("phase") != "commit" or head == current.get("input")
+                            or args.accept_checkpoint != head):
+                        raise Pending("--accept-checkpoint must name the full current SHA of the pending checkpoint.")
+                if args.commit_subject is not None:
+                    current = s["rounds"][-1] if s["rounds"] else {}
+                    check_branch(s)
+                    expected = current.get("output") or current.get("input") or s["start"]
+                    if current.get("phase") == "publish" or rev(repo, "HEAD") != expected:
+                        raise Pending("A new subject applies only before the checkpoint is committed.")
+                    s["commit_subject"] = args.commit_subject
+                    save(folder / "state.json", s)
             else:
                 folder, s = create_run(args, repo)
-            execute(s, folder, args.recover)
+            execute(s, folder, args.recover, args.accept_checkpoint)
             print(json.dumps(report(s, folder)))
             return 0
     except (RuntimeError, ValueError, OSError, subprocess.SubprocessError) as exc:
@@ -801,6 +841,8 @@ def handle(args):
 
 def register(subparsers):
     p = subparsers.add_parser("simplify", description=__doc__)
+    p.add_argument("--rounds", type=int, choices=(1, 2, 3), help="fresh Opus rounds (default 3)")
+    p.add_argument("--commit-subject", help="checkpoint subject required by the target repository")
     p.add_argument("--repo", help="target worktree (default current directory)")
     p.add_argument("--base", help="starting branch base or SHA")
     p.add_argument("--task", help="frozen requirements and relevant facts")
@@ -820,6 +862,7 @@ def register(subparsers):
         help="push each completed round to this named remote",
     )
     p.add_argument("--timeout", type=int, default=300, help="seconds per verification command")
+    p.add_argument("--accept-checkpoint", metavar="FULL_SHA", help="resume after inspecting an unmarked checkpoint commit")
     p.add_argument("--resume", metavar="RUN_ID")
     group = p.add_mutually_exclusive_group()
     group.add_argument("--status", action="store_true", help="inspect a saved run")
