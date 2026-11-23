@@ -117,7 +117,7 @@ class CommandSupervisionTests(unittest.TestCase):
             (repo / other_name).write_text("user work")
             python = """from pathlib import Path
 import sys
-from rounds import stage
+from checkpoints import stage
 from workspace import workspace_lock
 
 repo = Path(sys.argv[1])

@@ -14,10 +14,16 @@ if os.name != "posix":
 if sys.version_info < (3, 11):
     sys.exit("Software Factory needs Python 3.11 or later")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from workspace import inspect, repo_root
 
 
 def main():
+    import dialogue
+    import doctor
+    import evidence
+    import rounds
+    from installation import update
+    from workspace import inspect, repo_root
+
     parser = argparse.ArgumentParser(
         description="Discover a checkout, capture verification, and coordinate engineering work."
     )
@@ -45,19 +51,12 @@ def main():
         return inspect(root, [location.relative_to(root), *args.path]), 0
 
     scan.set_defaults(action=discover)
-    from installation import update
 
     sub.add_parser(
         "update", help="Install the latest Factory from its origin's main branch"
     ).set_defaults(action=update)
-    import doctor
-    import evidence
-
     doctor.register(sub)
-
     evidence.register(sub)
-    import dialogue
-    import rounds
 
     dialogue.register(sub)
     rounds.register(sub)

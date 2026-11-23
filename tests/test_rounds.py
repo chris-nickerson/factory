@@ -15,6 +15,7 @@ import argparse
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills/software-factory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 rounds = importlib.import_module("rounds")
+checkpoints = importlib.import_module("checkpoints")
 
 
 # A deterministic CLI exercises actual harness subprocess and session transport.
@@ -103,12 +104,18 @@ class RoundsTests(unittest.TestCase):
         subject = "refactor: simplify calculation [DEMO-12]"
         for count in (1, 2):
             with self.subTest(count=count):
-                code, result = self.invoke(*self.start, "--rounds", str(count), "--commit-subject", subject)
+                code, result = self.invoke(
+                    *self.start, "--rounds", str(count), "--commit-subject", subject
+                )
                 self.assertEqual(code, 0, result)
                 self.assertEqual(result["target_rounds"], count)
-                self.assertEqual(len({r["session_id"] for r in result["rounds"]}), count)
+                self.assertEqual(
+                    len({r["session_id"] for r in result["rounds"]}), count
+                )
                 self.assertEqual(self.git("log", "-1", "--format=%s"), subject)
-                self.assertEqual(self.invoke("--resume", result["id"], "--rounds", "3")[0], 2)
+                self.assertEqual(
+                    self.invoke("--resume", result["id"], "--rounds", "3")[0], 2
+                )
 
     def test_recover_rejected_subject_with_rewriting_hook_and_trailer(self):
         hook = self.repo / ".git/hooks/commit-msg"
@@ -121,14 +128,18 @@ class RoundsTests(unittest.TestCase):
         code, pending = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
         self.assertEqual(code, 2, pending)
         subject = "refactor: simplify calculation"
-        code, result = self.invoke("--resume", pending["run"], "--recover", "--commit-subject", subject)
+        code, result = self.invoke(
+            "--resume", pending["run"], "--recover", "--commit-subject", subject
+        )
         self.assertEqual(code, 0, result)
         self.assertEqual(len(self.turns.read_text().splitlines()), 2)
         body = self.git("log", "-1", "--format=%B").splitlines()
         self.assertEqual(body[0], "DEMO-12 " + subject)
         self.assertNotIn(f"Factory simplify round 1 [{result['id']}]", body)
         self.assertIn("Change-Id: I123", body)
-        self.assertEqual(result["rounds"][0]["remote_head"], self.git("rev-parse", "HEAD"))
+        self.assertEqual(
+            result["rounds"][0]["remote_head"], self.git("rev-parse", "HEAD")
+        )
         for bad in ("", " padded", "two\nlines"):
             self.assertEqual(self.invoke(*self.start, "--commit-subject", bad)[0], 2)
 
@@ -149,16 +160,27 @@ class RoundsTests(unittest.TestCase):
         code, refused = self.invoke("--resume", pending["run"])
         self.assertEqual(code, 2, refused)
         self.assertIn("no run marker", refused["error"])
-        for recovery in (("--recover",), ("--accept-checkpoint", "wrong"), ("--accept-checkpoint", "")):
+        for recovery in (
+            ("--recover",),
+            ("--accept-checkpoint", "wrong"),
+            ("--accept-checkpoint", ""),
+        ):
             self.assertEqual(self.invoke("--resume", pending["run"], *recovery)[0], 2)
-        code, complete = self.invoke("--resume", pending["run"], "--accept-checkpoint", self.git("rev-parse", "HEAD"))
+        code, complete = self.invoke(
+            "--resume",
+            pending["run"],
+            "--accept-checkpoint",
+            self.git("rev-parse", "HEAD"),
+        )
         self.assertEqual(code, 0, complete)
         self.assertEqual(len(self.turns.read_text().splitlines()), 2)
 
     def test_custom_subject_survives_git_comment_cleanup(self):
         self.git("config", "commit.cleanup", "strip")
         subject = "#123 simplify calculation"
-        code, result = self.invoke(*self.start, "--rounds", "1", "--commit-subject", subject)
+        code, result = self.invoke(
+            *self.start, "--rounds", "1", "--commit-subject", subject
+        )
         self.assertEqual(code, 0, result)
         self.assertEqual(self.git("log", "-1", "--format=%B"), subject)
 
@@ -214,8 +236,8 @@ class RoundsTests(unittest.TestCase):
             "repo": str(self.repo),
             "remote": "fixture",
             "branch": "feature",
-            "destination": rounds.digest(
-                os.fsencode(rounds.push_destination(self.repo, "fixture"))
+            "destination": checkpoints.digest(
+                os.fsencode(checkpoints.push_destination(self.repo, "fixture"))
             ),
         }
 
@@ -245,19 +267,19 @@ class RoundsTests(unittest.TestCase):
         other = self.new_remote()
         state = self.destination_state()
         wanted = self.git("rev-parse", "HEAD")
-        run_git = rounds.git
+        run_git = checkpoints.git
 
         def reconfigure(repo, *args, **kwargs):
             if args[0] == "push":
                 self.git("remote", "set-url", "--push", "fixture", str(other))
             return run_git(repo, *args, **kwargs)
 
-        with patch.object(rounds, "git", reconfigure):
-            self.assertEqual(rounds.push_checkpoint(state, None, wanted), wanted)
+        with patch.object(checkpoints, "git", reconfigure):
+            self.assertEqual(checkpoints.push_checkpoint(state, None, wanted), wanted)
         self.assertEqual(self.refs_in(original), ["refs/heads/feature"])
         self.assertEqual(self.refs_in(other), [])
-        with self.assertRaisesRegex(rounds.Pending, "destination changed"):
-            rounds.published(state)
+        with self.assertRaisesRegex(checkpoints.Pending, "destination changed"):
+            checkpoints.published(state)
 
     def test_chained_url_rewrites_resolve_once_for_read_and_write(self):
         original = self.folder / "upstream.git"
@@ -266,11 +288,11 @@ class RoundsTests(unittest.TestCase):
         self.git("config", f"url.{other}.insteadOf", str(original))
         self.git("config", f"url.{other}.pushInsteadOf", str(original))
         self.git("remote", "set-url", "fixture", "fixture-source:")
-        self.assertEqual(rounds.push_destination(self.repo, "fixture"), str(original))
+        self.assertEqual(checkpoints.push_destination(self.repo, "fixture"), str(original))
         state = self.destination_state()
         wanted = self.git("rev-parse", "HEAD")
-        self.assertEqual(rounds.push_checkpoint(state, None, wanted), wanted)
-        self.assertEqual(rounds.published(state), wanted)
+        self.assertEqual(checkpoints.push_checkpoint(state, None, wanted), wanted)
+        self.assertEqual(checkpoints.published(state), wanted)
         self.assertEqual(self.refs_in(original), ["refs/heads/feature"])
         self.assertEqual(self.refs_in(other), [])
 
