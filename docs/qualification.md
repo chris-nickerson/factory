@@ -57,3 +57,15 @@ The live runner requires authenticated Codex access. For the browser case, use `
 The outcome-transfer experiment uses two disposable repositories with different disclosure controls. A pointer-only contract passes both. A browser check using Space and Enter exposes both defects and passes after each fixture is repaired. A third repository runs only its CLI contract. This is a hand-authored candidate check and a synthetic correction. The experiment measures whether that specific check transfers across implementations.
 
 With Chrome and Playwright available, run `FACTORY_PLAYWRIGHT=/path/to/playwright python3 -B evals/outcome_transfer.py /tmp/factory-outcome-new` from this checkout. The new directory holds the checkouts, local Factory receipts and `result.json`.
+
+## Choosing checks for different tasks
+
+We compared the original and revised local-workflow instructions on three small requests. Each pair used fresh read-only Codex sessions, the same prompt and equivalent project files. A Claude Opus reviewer graded anonymized answers against criteria written before the runs. The storage checks were also executed outside the agent sessions.
+
+| Request | Observed result |
+| --- | --- |
+| Reorganize a preferences store while preserving saved settings | Both generated checks accepted the original and a compatible encoding change. Both rejected a reader that could open only its own new files. A follow-up prompted by the blind review moved the public module into a package. The original guide's check then rejected the valid layout because it required a particular filename. The revised guide's check passed. |
+| Decide whether to adopt a faster-looking export | Both answers caught that the timer stopped at generator creation. Both called for checking the complete output. The revised guide's answer also asked for alternating runs and reporting the spread alongside the median. |
+| Verify a README display-name correction | Both answers kept verification to the documentation change. Neither explicitly checked the name against the project's source of truth. |
+
+One pair per request was graded. The first README pair ran in plain folders with the corrected text already present. We reran that request in Git checkouts containing the typo correction so the proposed diff check could inspect a real change. Only the second README pair went to the reviewer. This experiment tests the choice of a check. It supplies no estimate of task completion rates, token savings or runtime speedups. [Local workflow](../skills/software-factory/references/local.md#choose-the-baseline)

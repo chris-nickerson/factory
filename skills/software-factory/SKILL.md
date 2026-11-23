@@ -11,7 +11,7 @@ Use the executable at `scripts/factory` relative to this skill's real directory,
 | --- | --- |
 | Diagnose or decide independently with a second model | Use `factory consensus`. [Consensus procedure](references/consensus.md) |
 | Simplify a nontrivial PR | Use `factory simplify`. Select the push-each-round variant when requested. [Simplification procedure](references/simplify.md) |
-| Implement, verify, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
+| Implement, verify, refactor, measure performance, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
 | Attach a real-world correction to a prior run | Use `factory outcome` with the relevant run and observed behavior. [Later outcomes](references/local.md#later-outcomes) |
 | Deliver an implementation with GPT and Opus | Compose consensus if requested, GPT implementation, the size-based Opus rounds, a fresh GPT review and final behavioral checks. [Delivery and continuation](references/delivery.md) |
 
