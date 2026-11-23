@@ -45,6 +45,11 @@ def main():
         return inspect(root, [location.relative_to(root), *args.path]), 0
 
     scan.set_defaults(action=discover)
+    from installation import update
+
+    sub.add_parser(
+        "update", help="Install the latest Factory from its origin's main branch"
+    ).set_defaults(action=update)
     import doctor
     import evidence
 

@@ -40,7 +40,15 @@ Use `factory outcome RUN_ID --note "Reopened: pointer works, Space does not" --e
 
 Runs use `$FACTORY_STATE_DIR` or `$XDG_STATE_HOME/software-factory` (default `~/.local/state/software-factory`). Keep state outside the target checkout. Evidence can contain source, change descriptions and command output. The CLI stores it locally. Cross-model runs send their task context to the configured providers.
 
-Installations reference content-addressed copies of the complete skill and executable. Rerun `python3 install.py` to install an updated checkout, `python3 install.py --rollback` to switch to the previous release, or `python3 install.py --remove` to unlink that installation. Use the original prefix for each operation. Existing unrelated skills and foreign executables are preserved.
+After installation, run the following from any directory:
+
+```sh
+factory update
+```
+
+Factory fetches `main` from the origin recorded during installation into a temporary checkout, verifies the package, and switches the CLI and skill together. The result includes the fetched commit and reports `updated` or `up_to_date`. Updates preserve custom install locations. An installation from an archive uses the official GitHub repository by default. Access to a private origin uses your configured Git credentials.
+
+For older installations that predate this command, run `python3 install.py` once from an updated Factory checkout. The installer also supports installing a local branch, `--rollback` to restore the previous release, and `--remove` to unlink the installation. Use the original prefix for each operation. Existing unrelated skills and foreign executables are preserved.
 
 ## Verification and design
 

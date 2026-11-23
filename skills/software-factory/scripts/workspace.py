@@ -23,11 +23,11 @@ def state_root():
     )
 
 
-def git(repo, *args, check=True):
+def git(repo, *args, check=True, env=None):
     argv = ["git", "-C", str(repo), *args]
     try:
         return subprocess.run(
-            argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check
+            argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check, env=env
         )
     except FileNotFoundError:
         if check or any(
