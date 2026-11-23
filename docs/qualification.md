@@ -51,3 +51,9 @@ python3 -B evals/qualify.py library /tmp/factory-library-direct-new --direct
 ```
 
 The live runner requires authenticated Codex access. For the browser case, use `web` in place of `library` and set `FACTORY_PLAYWRIGHT` to a resolvable Node package exporting Playwright's Chromium driver. It launches the installed Chrome channel. Each invocation requires a new output directory and preserves its independent grader output, transcript, timing and review decision for inspection.
+
+## Learning from a reported outcome
+
+The outcome-transfer experiment uses two disposable repositories with different disclosure controls. A pointer-only contract passes both. A browser check using Space and Enter exposes both defects and passes after each fixture is repaired. A third repository runs only its CLI contract. This is a hand-authored candidate check and a synthetic correction. The experiment measures whether that specific check transfers across implementations.
+
+With Chrome and Playwright available, run `FACTORY_PLAYWRIGHT=/path/to/playwright python3 -B evals/outcome_transfer.py /tmp/factory-outcome-new` from this checkout. The new directory holds the checkouts, local Factory receipts and `result.json`.

@@ -89,6 +89,53 @@ class FactoryTests(unittest.TestCase):
             self.cli("status", run, code=2)["claims"]["sum"]["status"], "STALE"
         )
 
+    def test_outcomes_bind_to_checked_subject_and_preserve_the_gate(self):
+        run = self.start()
+        args = (
+            "outcome",
+            run,
+            "--note",
+            "Keyboard activation failed",
+            "--evidence",
+            "issue-7",
+        )
+        self.assertEqual(self.cli("outcome", run)["outcomes"], [])
+        self.cli(*args, code=2)
+        failed = self.cli("check", run, code=1)
+        (self.repo / "maths.py").write_text("def add(a,b): return a+b\n")
+        verified = self.cli("check", run)
+        self.cli(*args, code=2)
+        self.cli(*args, "--subject", "unknown", code=2)
+        selected = (*args, "--subject", verified["subject"])
+        stored = self.cli(*selected)["outcome"]
+        self.assertEqual(stored["checks"], [verified["claims"]["sum"]["latest"]["log"]])
+        self.assertEqual(self.cli(*selected)["outcome"], stored)
+        self.assertEqual(self.cli("status", run), verified)
+        self.cli(
+            "outcome",
+            run,
+            "--subject",
+            failed["subject"],
+            "--note",
+            "Original failure confirmed",
+        )
+        result = self.cli("outcome", run)
+        self.assertEqual(len(result["outcomes"]), 2)
+        self.assertEqual(
+            set(result["subjects"]), {verified["subject"], failed["subject"]}
+        )
+
+    def test_feedback_survives_checkout_removal(self):
+        run = self.start()
+        failed = self.cli("check", run, code=1)
+        self.repo.rename(self.home / "archived-checkout")
+        result = subprocess.check_output(
+            [str(CLI), "outcome", run, "--note", "Issue later reopened"],
+            cwd=self.home,
+            env=self.env,
+        )
+        self.assertEqual(json.loads(result)["outcome"]["subject"], failed["subject"])
+
     def test_frozen_oracle_assertions_survive_ambient_optimization(self):
         self.env["PYTHONOPTIMIZE"] = "1"
         run = self.start()

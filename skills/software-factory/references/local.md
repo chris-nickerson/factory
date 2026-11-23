@@ -28,3 +28,9 @@ factory status RUN_ID
 A run tracks the whole Git source set, including staged content, unstaged changes and unignored new files. In plain folders it hashes the whole tree. Put generated outputs in the repository's established ignored directories or outside it. A check that changes the subject cannot establish a pass. Receipts persist under `FACTORY_STATE_DIR` or the user's XDG state directory. One local Factory operation locks a workspace at a time. Other applications can still write to it.
 
 For build-only, configuration, documentation or unusual tasks, choose a fitting consumer or artifact check. An independent Python oracle can call any installed runtime. A target can declare repeatable command candidates as argument arrays in the `[checks]` table of `software-factory.toml`. Inspect reads those declarations, and the agent selects an appropriate check for the contract.
+
+## Later outcomes
+
+When the user reports a correction or real-world outcome, use `factory outcome RUN_ID --note "what happened"` and optionally `--evidence TICKET_OR_ARTIFACT`. Factory stores the reference as text. Use `factory outcome RUN_ID` to see the observations and evidence-bearing revision fingerprints, including after checkout removal. Select `--subject FINGERPRINT` if several revisions were checked. Repeating the same observation and reference on one revision returns the original record.
+
+When asked to learn from feedback, inspect the cited evidence and the original contract. Propose the smallest check or workflow change that would have caught the miss. Name the repository, harness, task type or explicit preference that limits its scope. Try the proposal on the original case, a second applicable case and an unrelated control. Use synthetic reproductions for cross-repository work and keep private evidence local. Promotion to a shared workflow is a separate reviewed change.

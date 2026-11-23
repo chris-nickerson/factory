@@ -250,6 +250,63 @@ def status(args):
         return summary(folder, load(folder), snapshot(repo))
 
 
+def outcome(args):
+    folder = run_path(args.run)
+    with workspace_lock(load(folder)["repo"]):
+        data = load(folder)
+        outcomes = data.get("outcomes", [])
+        attempts = [a for a in data["attempts"] if "finished" in a]
+        reviews = [r for r in data["reviews"] if r.get("report")]
+        subjects = sorted({r["subject"] for r in attempts + reviews})
+        if args.note is None:
+            if args.subject is not None or args.evidence is not None:
+                raise ValueError(
+                    "Use --note to attach feedback with a subject or evidence reference"
+                )
+            return dict(run=args.run, subjects=subjects, outcomes=outcomes), 0
+
+        note = args.note.strip()
+        if not note:
+            raise ValueError("Describe the observed outcome in --note")
+        if not subjects:
+            raise ValueError("Record a check or review before attaching an outcome")
+        subject = args.subject
+        if subject is None:
+            if len(subjects) != 1:
+                raise ValueError(
+                    "Several revisions have evidence. Choose --subject from: "
+                    + ", ".join(subjects)
+                )
+            subject = subjects[0]
+        if subject not in subjects:
+            raise ValueError(
+                "The selected subject has no recorded evidence in this run"
+            )
+
+        evidence = args.evidence.strip() if args.evidence is not None else None
+        if evidence == "":
+            raise ValueError("Supply a nonempty evidence reference")
+        for entry in outcomes:
+            if (entry["subject"], entry["note"], entry["evidence"]) == (
+                subject,
+                note,
+                evidence,
+            ):
+                return dict(run=args.run, outcome=entry), 0
+        entry = dict(
+            id=uuid.uuid4().hex,
+            subject=subject,
+            note=note,
+            evidence=evidence,
+            recorded=time.time(),
+            checks=[a["log"] for a in attempts if a["subject"] == subject],
+            reviews=[r["report"] for r in reviews if r["subject"] == subject],
+        )
+        data.setdefault("outcomes", []).append(entry)
+        write_json(folder / "state.json", data)
+        return dict(run=args.run, outcome=entry), 0
+
+
 def review(args):
     from harness import run_turn
 
@@ -337,6 +394,19 @@ def review(args):
 
 
 def register(sub):
+    feedback = sub.add_parser(
+        "outcome", help="Read or attach a later observation to a local evidence run"
+    )
+    feedback.add_argument("run")
+    feedback.add_argument("--note", help="Observed behavior, correction, or result")
+    feedback.add_argument(
+        "--subject", help="Checked subject fingerprint printed by Factory"
+    )
+    feedback.add_argument(
+        "--evidence", help="Optional local artifact or ticket reference, stored as text"
+    )
+    feedback.set_defaults(action=outcome)
+
     parser = sub.add_parser("start", help="Freeze a local verification contract")
     parser.add_argument("--repo", default=".")
     parser.add_argument("--task", required=True)

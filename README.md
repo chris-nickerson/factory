@@ -30,6 +30,10 @@ For a Claude Code project, supply `--skill-dir /path/to/project/.claude/skills` 
 
 Run `factory doctor --profile paired` to check the local Codex and Claude Code installations and their reported login state. Named cross-model workflows require working model access. Budget exhaustion, a missing peer, stale evidence or an observed regression stays visible in the result. The CLI uses exit 0 for success, 1 for failed local evidence and 2 for incomplete or blocked work.
 
+## Record a later outcome
+
+Use `factory outcome RUN_ID --note "Reopened: pointer works, Space does not" --evidence TICKET-123` to attach an observation. Read it with `factory outcome RUN_ID`. If the run checked multiple revisions, select the fingerprint with `--subject`. An outcome is local feedback about a particular revision. The original verification verdict still describes the frozen checks. [Using feedback](skills/software-factory/references/local.md#later-outcomes)
+
 ## State and upgrades
 
 Runs use `$FACTORY_STATE_DIR` or `$XDG_STATE_HOME/software-factory` (default `~/.local/state/software-factory`). Keep state outside the target checkout. Evidence can contain source, change descriptions and command output. The CLI stores it locally. Cross-model runs send their task context to the configured providers.
