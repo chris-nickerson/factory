@@ -232,7 +232,7 @@ class FactoryTests(unittest.TestCase):
         bin_dir.mkdir()
         fake = bin_dir / "codex"
         fake.write_text(
-            "#!/usr/bin/env python3\nimport sys,json,uuid\ns=sys.stdin.read()\n"
+            "#!/usr/bin/env python3\nimport sys,json,time,uuid\ns=sys.stdin.read()\ntime.sleep(1.2)\n"
             "assert '--cached' in s and 'Index to working tree:' in s and s.count('maths.py')>=2\n"
             "for event in [{'type':'thread.started','thread_id':str(uuid.uuid4())},"
             "{'type':'item.completed','item':{'type':'agent_message','text':'Staged wrong value.\\nVERDICT: FINDINGS'}},"
@@ -240,7 +240,7 @@ class FactoryTests(unittest.TestCase):
         )
         fake.chmod(0o755)
         self.env["PATH"] = str(bin_dir) + os.pathsep + self.env["PATH"]
-        report = self.cli("review", run, code=1)
+        report = self.cli("review", run, "--timeout", "1", code=1)
         self.assertEqual(report["review"], "FINDINGS")
 
     def test_failure_modes(self):

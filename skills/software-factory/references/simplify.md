@@ -11,7 +11,7 @@ factory simplify --repo . --base trunk --task 'Preserve the parser contract and 
   --check 'python3 -m unittest discover -s tests' --push origin
 ```
 
-Each `--check` is one argument vector with shell-style quoting. To invoke a project script, pass its executable and arguments. Repeat the option to add another check. For local-only work, omit `--push`. Use `--timeout SECONDS` to change the deadline per provider turn or check.
+Each `--check` is one argument vector with shell-style quoting. To invoke a project script, pass its executable and arguments. Repeat the option to add another check. For local-only work, omit `--push`. Use `--timeout SECONDS` to change the limit for each verification command. Opus editing, assessment and repair turns have no Factory time limit.
 
 The first message of each fresh session comes from the [canonical prompt](reconsider-from-first-principles.v1.txt). The runner supplies the requirements, edit scope and branch evidence separately. New editing and repair turns use Claude Code Auto with file tools and sandboxed Bash for local tests. Auto evaluates shell requests. Factory runs its own checks and owns Git commits and pushes. Each assessment resumes the same session with read-only file tools. Runs started with the earlier file-only profile retain that profile on resume. Auto shell requires a working Claude Code sandbox on the host. Factory returns actual check output to the same session for assessment. A failed check forces repair even when the model claims success. A round can attempt two repairs before stopping with its artifacts intact.
 

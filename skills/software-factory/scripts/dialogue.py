@@ -8,7 +8,6 @@ import os
 import re
 import sys
 import tempfile
-import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -41,7 +40,7 @@ PROPOSE = (
     "before a final line of STATUS: RESOLUTION_PROPOSED, or explain the open question "
     "and end with STATUS: OPEN. Do not quote or wrap the status line."
 )
-SCHEMA = 1
+SCHEMA = 2
 
 
 class DialogueError(RuntimeError):
@@ -190,10 +189,6 @@ def _view(directory, message=None):
         )
     if message:
         result.update(status="blocked", reason=message)
-    elif result["status"] == "pending" and time.time() >= meta["expires"]:
-        result.update(
-            status="blocked", reason="Run deadline expired. Start a new investigation."
-        )
     return result
 
 
@@ -233,9 +228,6 @@ def _response(directory, meta, step, actor, prompt, context, session=None):
             raise DialogueError(
                 f"An earlier provider call may still be active at {attempt}."
             )
-    remaining = int(meta["expires"] - time.time())
-    if remaining < 1:
-        raise DialogueError("Run deadline expired. Start a new investigation.")
     attempt = folder / f"attempt-{len(attempts) + 1:04d}"
     attempt.mkdir()
     _publish(attempt / "request.json", request)
@@ -247,7 +239,6 @@ def _response(directory, meta, step, actor, prompt, context, session=None):
         model=request["model"],
         session_id=session,
         edit=False,
-        timeout=min(remaining, meta["timeout"]),
         output_dir=attempt / "call",
     )
     if session and result["session_id"] != session:
@@ -288,7 +279,7 @@ def _dialogue_prompt(meta, actor, turns, opening_b):
 
 def _drive(directory):
     meta = _load(directory / "run.json")
-    if meta.get("version") != SCHEMA:
+    if meta.get("version") not in (1, SCHEMA):
         raise DialogueError("Unsupported consensus record version.")
     repo = Path(meta["repo"])
     if snapshot(repo) != meta["subject"]:
@@ -381,15 +372,9 @@ def register(subparsers):
         config.add_argument("--repo", type=Path, default=Path.cwd())
         config.add_argument("--task", required=True)
         config.add_argument("--exchanges", type=_positive, default=3)
-        config.add_argument(
-            "--timeout", type=_positive, default=180, help="seconds per provider call"
-        )
-        config.add_argument(
-            "--deadline",
-            type=_positive,
-            default=1200,
-            help="elapsed seconds for the complete run",
-        )
+        # Accept invocations generated for the old CLI without limiting agents.
+        config.add_argument("--timeout", type=_positive, help=argparse.SUPPRESS)
+        config.add_argument("--deadline", type=_positive, help=argparse.SUPPRESS)
         config.add_argument("--gpt-model", help="Codex model override")
         config.add_argument(
             "--opus-model", default="opus", help="Claude model selection"
@@ -402,6 +387,11 @@ def register(subparsers):
 def handle(args):
     action = args.consensus_action
     if action in GOALS:
+        if args.timeout or args.deadline:
+            print(
+                "Factory ignores legacy consensus time limits. Agent turns run until completion or cancellation.",
+                file=sys.stderr,
+            )
         repo = repo_root(args.repo)
         if not args.task.strip() or not repo.is_dir():
             raise DialogueError("Supply a nonempty task and repository directory.")
@@ -422,8 +412,6 @@ def handle(args):
                 "mode": action,
                 "models": {"a": args.gpt_model, "b": args.opus_model},
                 "exchanges": args.exchanges,
-                "timeout": args.timeout,
-                "expires": time.time() + args.deadline,
             },
         )
         print(f"Consensus run {directory.name}", file=sys.stderr, flush=True)

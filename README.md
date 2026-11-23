@@ -28,6 +28,8 @@ For a Claude Code project, supply `--skill-dir /path/to/project/.claude/skills` 
 | Run the three simplification rounds | `factory simplify --repo PATH --base REF --task TEXT --check 'make test'` | Three fresh Opus sessions with Auto editing, sandboxed shell and local tests. Factory runs independent checks, obtains a read-only assessment and owns Git checkpoints. Add `--push REMOTE` for per-round commit publication and remote head readback. [Three-round procedure](skills/software-factory/references/simplify.md) |
 | Deliver a complete change | Ask a coordinating GPT agent to use the full delivery profile | Implementation, the selected collaboration phases, a fresh whole-change review and final behavioral verification. The coordinating agent drives repo-specific PR/CI work within the requested scope. [Delivery procedure](skills/software-factory/references/delivery.md) |
 
+Agent turns run until the provider returns, fails, or the coordinator is stopped. Factory keeps separate limits for verification commands and Git operations. The legacy `--timeout` on review and consensus and `--deadline` on consensus are accepted with a notice and ignored.
+
 Run `factory doctor --profile paired` to check the local Codex and Claude Code installations and their reported login state. Named cross-model workflows require working model access. Budget exhaustion, a missing peer, stale evidence or an observed regression stays visible in the result. The CLI uses exit 0 for success, 1 for failed local evidence and 2 for incomplete or blocked work.
 
 ## Record a later outcome

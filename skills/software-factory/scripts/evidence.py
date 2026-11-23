@@ -1,9 +1,11 @@
 """Local contracts, captured behavioral checks and revision-bound review."""
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
 import re
+import sys
 import time
 import uuid
 
@@ -153,8 +155,6 @@ def start(args):
 
 
 def check(args):
-    import sys
-
     folder = run_path(args.run)
     repo = Path(load(folder)["repo"])
     with workspace_lock(repo):
@@ -310,6 +310,12 @@ def outcome(args):
 def review(args):
     from harness import run_turn
 
+    if args.timeout is not None:
+        print(
+            "Factory ignores the legacy review time limit. Agent turns run until completion or cancellation.",
+            file=sys.stderr,
+        )
+
     folder = run_path(args.run)
     repo = Path(load(folder)["repo"])
     with workspace_lock(repo):
@@ -370,7 +376,6 @@ def review(args):
                 repo=repo,
                 prompt=prompt,
                 model=args.model,
-                timeout=args.timeout,
                 output_dir=output,
             )
             report = folder / f"{output.name}.md"
@@ -437,8 +442,13 @@ def register(sub):
         parser.add_argument("run")
         if name == "check":
             parser.add_argument("--claim", action="append")
-        if name != "status":
-            parser.add_argument("--timeout", type=int, default=180)
+            parser.add_argument(
+                "--timeout",
+                type=int,
+                default=180,
+                help="seconds per verification command",
+            )
         if name == "review":
+            parser.add_argument("--timeout", type=int, help=argparse.SUPPRESS)
             parser.add_argument("--model")
         parser.set_defaults(action=handler)

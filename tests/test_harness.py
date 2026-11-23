@@ -29,6 +29,7 @@ item={'argv': args, 'prompt': text, 'cwd': os.getcwd()}
 if '--append-system-prompt-file' in args:
     item['context']=pathlib.Path(option('--append-system-prompt-file')).read_text()
 (root/'observed.json').write_text(json.dumps(item))
+if case=='slow-success': time.sleep(1.2)
 if case=='slow':
     subprocess.Popen([sys.executable, '-c',
         "import time,pathlib; time.sleep(1.4); pathlib.Path('surviving-child').touch()"])
@@ -150,20 +151,19 @@ class HarnessTests(unittest.TestCase):
                 self.assertEqual(receipt["status"], "failed")
                 self.assertNotIn("text", receipt)
 
-    def test_timeout_also_stops_descendants(self):
-        with patch.dict(os.environ, {"HARNESS_CASE": "slow"}):
-            with self.assertRaisesRegex(HarnessError, "timed out"):
-                self.turn(timeout=0.5)
-        time.sleep(1.5)
-        self.assertEqual(self.receipt()["status"], "failed")
-        self.assertFalse((self.repo / "surviving-child").exists())
+    def test_quiet_agent_finishes_without_a_deadline(self):
+        with patch.dict(os.environ, {"HARNESS_CASE": "slow-success"}):
+            result = self.turn()
+        self.assertEqual(result["status"], "success")
+        self.assertGreaterEqual(result["elapsed_seconds"], 1)
+        self.assertNotIn("timeout", result)
 
     def test_crashing_coordinator_ends_edit_attempt(self):
         directory = self.root / "abandoned"
         source = (
             "from harness import run_turn; import sys; "
             "run_turn('claude',repo=sys.argv[1],prompt='hello',edit=True,"
-            "timeout=60,output_dir=sys.argv[2])"
+            "output_dir=sys.argv[2])"
         )
         with patch.dict(
             os.environ, {"HARNESS_CASE": "slow", "PYTHONPATH": str(SCRIPTS)}

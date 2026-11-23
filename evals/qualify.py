@@ -228,7 +228,7 @@ def main():
             start_new_session=True,
         )
         try:
-            proc.communicate(prompt, timeout=300)
+            proc.communicate(prompt)
         except BaseException:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)

@@ -220,6 +220,25 @@ class DialogueTests(unittest.TestCase):
             1, sum(p == "codex" and c["session_id"] is None for p, c in self.calls)
         )
 
+    def test_expired_legacy_run_reuses_completed_opening_without_agent_timers(self):
+        self.script = [OPEN, HarnessError("Command timed out after 150s")]
+        code, out = self.start("--timeout", "150", "--deadline", "720")
+        self.assertEqual((code, out["status"]), (2, "blocked"))
+        path = Path(out["artifacts"]) / "run.json"
+        meta = json.loads(path.read_text())
+        self.assertNotIn("expires", meta)
+        self.assertNotIn("timeout", meta)
+        meta.update(version=1, expires=1, timeout=150)
+        path.write_text(json.dumps(meta))
+        self.script = [OPEN, PROPOSE_B, ACCEPT_B]
+        code, resumed = self.invoke("resume", out["run"])
+        self.assertEqual((code, resumed["status"]), (0, "confirmed"))
+        self.assertEqual(
+            [p for p, c in self.calls if c["session_id"] is None],
+            ["codex", "claude", "claude"],
+        )
+        self.assertTrue(all("timeout" not in c for _, c in self.calls))
+
     def test_resume_preserves_prelaunch_attempt_and_dispatches_in_new_directory(self):
         with (
             patch.object(dialogue, "run_turn", harness.run_turn),

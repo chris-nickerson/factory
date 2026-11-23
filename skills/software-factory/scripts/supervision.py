@@ -1,4 +1,4 @@
-"""Run local commands in a bounded process group owned by one coordinator."""
+"""Supervise process groups and optional command deadlines for one coordinator."""
 
 import json
 import os
@@ -62,7 +62,7 @@ def run_worker(script, argument, timeout, *, private_fds=(), env=None):
         env=env,
     )
     try:
-        worker.wait(timeout=timeout + 12)
+        worker.wait(timeout=None if timeout is None else timeout + 12)
     except subprocess.TimeoutExpired as error:
         raise ProcessError(
             "Supervisor failed to finish. Inspect its process receipt."
@@ -105,7 +105,7 @@ def execute_owned(argv, *, cwd, stdin, stdout, stderr, timeout, on_start, env=No
     """Execute from the watchdog (stdin is its coordinator-liveness pipe)."""
     if _owner_gone():
         raise ProcessError("Coordinator interrupted the command before launch")
-    deadline = time.monotonic() + timeout
+    deadline = None if timeout is None else time.monotonic() + timeout
     parent, child = socket.socketpair()
     with parent, child:
         proc = subprocess.Popen(
@@ -132,10 +132,13 @@ def execute_owned(argv, *, cwd, stdin, stdout, stderr, timeout, on_start, env=No
                 raise ProcessError("Coordinator interrupted the command before launch")
             parent.sendall(b"G")
             while proc.poll() is None:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise ProcessError(f"Command timed out after {timeout}s")
-                if _owner_gone(min(0.05, remaining)):
+                wait = 0.05
+                if deadline is not None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise ProcessError(f"Command timed out after {timeout}s")
+                    wait = min(wait, remaining)
+                if _owner_gone(wait):
                     raise ProcessError("Command interrupted by its coordinator")
             startup_error = parent.recv(2048)
             if startup_error:

@@ -472,7 +472,6 @@ def contact(s, r, folder, kind, prompt, context):
         session_id=session,
         edit=kind != "assess",
         local_shell=s["profile"] == PROFILE and kind != "assess",
-        timeout=s["timeout"],
         output_dir=folder / call_name,
     )
 
@@ -820,7 +819,7 @@ def register(subparsers):
         metavar="REMOTE",
         help="push each completed round to this named remote",
     )
-    p.add_argument("--timeout", type=int, default=300, help="seconds per call/check")
+    p.add_argument("--timeout", type=int, default=300, help="seconds per verification command")
     p.add_argument("--resume", metavar="RUN_ID")
     group = p.add_mutually_exclusive_group()
     group.add_argument("--status", action="store_true", help="inspect a saved run")

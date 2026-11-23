@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import sys
@@ -180,7 +179,7 @@ def _supervise(directory):
                 stdin=prompt,
                 stdout=out,
                 stderr=err,
-                timeout=record["timeout"],
+                timeout=None,
                 on_start=started_group,
             )
             record["returncode"] = rc
@@ -232,7 +231,6 @@ def run_turn(
     session_id=None,
     edit=False,
     local_shell=False,
-    timeout=180,
     output_dir,
 ):
     """Start a fresh session or resume its exact ID; return the persisted receipt.
@@ -252,8 +250,6 @@ def run_turn(
         raise HarnessError("Expected a nonempty user prompt and text context")
     if local_shell and (provider != "claude" or not edit):
         raise HarnessError("Local shell requires an Opus editing turn")
-    if not math.isfinite(timeout) or timeout <= 0:
-        raise HarnessError("Timeout must be positive and finite")
     if session_id:
         try:
             uuid.UUID(session_id)
@@ -293,12 +289,11 @@ def run_turn(
         "has_context": bool(context),
         "edit": edit,
         "local_shell": local_shell,
-        "timeout": timeout,
     }
     receipt = directory / "receipt.json"
     _save(receipt, record)
     try:
-        run_worker(Path(__file__).resolve(), directory, timeout)
+        run_worker(Path(__file__).resolve(), directory, None)
     except (ProcessError, OSError) as exc:
         raise HarnessError(f"{exc} (receipt: {receipt})") from exc
     result = json.loads(receipt.read_text(encoding="utf-8"))
