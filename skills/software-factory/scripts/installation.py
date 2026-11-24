@@ -73,46 +73,36 @@ def skill_links(current):
     }
 
 
-def managed_skill(directory, current, source):
-    if not directory.is_dir() or directory.is_symlink():
-        return False
+def is_skill_entry(path, current, templates):
+    """Whether path is an unmodified skill directory published by this installation."""
     links = skill_links(current)
-    entry = directory / "SKILL.md"
-    templates = (current / SKILL_ENTRY, source / SKILL_ENTRY)
+    entry = path / "SKILL.md"
     return (
-        {p.name for p in directory.iterdir()} == {"SKILL.md", *links}
-        and all(
-            link_target(directory / name) == str(target)
-            for name, target in links.items()
-        )
+        path.is_dir()
+        and not path.is_symlink()
+        and {p.name for p in path.iterdir()} == {"SKILL.md", *links}
+        and all(link_target(path / n) == str(t) for n, t in links.items())
         and entry.is_file()
         and not entry.is_symlink()
-        and any(
-            template.is_file() and entry.read_bytes() == template.read_bytes()
-            for template in templates
-        )
+        and any(t.is_file() and t.read_bytes() == entry.read_bytes() for t in templates)
     )
 
 
-def install_default_skill(path, current, release, managed):
-    template = release / SKILL_ENTRY
-    if not template.is_file() and not managed:
-        if not path.is_symlink():
-            path.symlink_to(current)
-        return
-    if (
-        managed
-        and template.is_file()
-        and (path / "SKILL.md").read_bytes() == template.read_bytes()
-    ):
-        return
+def publish_default_skill(path, current, template):
+    """Publish a regular SKILL.md beside links into current, or the link older releases expect."""
     with tempfile.TemporaryDirectory(dir=path.parent) as temp:
         stage = Path(temp) / "skill"
         if template.is_file():
+            if path.is_dir() and not path.is_symlink():
+                shutil.copyfile(template, stage)
+                os.replace(stage, path / "SKILL.md")
+                return
             stage.mkdir()
             shutil.copyfile(template, stage / "SKILL.md")
             for name, target in skill_links(current).items():
                 (stage / name).symlink_to(target)
+        elif path.is_symlink():
+            return
         else:
             stage.symlink_to(current)
         previous = Path(temp) / "previous"
@@ -158,15 +148,11 @@ def install(
         not current.is_symlink() or current.resolve().parent != root / "releases"
     ):
         raise ValueError(f"Foreign current release: {current}")
-    managed = (
-        default_skill in destinations
-        and bool(saved)
-        and managed_skill(default_skill, current, source)
-    )
+    entries = (current / SKILL_ENTRY, source / SKILL_ENTRY)
     for link, target in destinations.items():
-        if link == default_skill and managed:
+        if not os.path.lexists(link) or link_target(link) == str(target):
             continue
-        if os.path.lexists(link) and link_target(link) != str(target):
+        if link != default_skill or not is_skill_entry(link, current, entries):
             raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
     if rollback:
@@ -201,10 +187,10 @@ def install(
         if not saved:
             raise ValueError("Missing installation manifest")
         for link in destinations:
-            if link == default_skill and managed:
-                shutil.rmtree(link)
-            elif link.is_symlink():
+            if link.is_symlink():
                 link.unlink()
+            elif link.is_dir():
+                shutil.rmtree(link)
         current.unlink(missing_ok=True)
         manifest.unlink()
         return report
@@ -232,7 +218,7 @@ def install(
     for link, target in destinations.items():
         link.parent.mkdir(parents=True, exist_ok=True)
         if link == default_skill:
-            install_default_skill(link, current, release, managed)
+            publish_default_skill(link, current, release / SKILL_ENTRY)
         elif not link.is_symlink():
             link.symlink_to(target)
     previous = old if old and old != str(release) else saved.get("previous")

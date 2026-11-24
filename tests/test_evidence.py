@@ -460,6 +460,10 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(cli.resolve(), original)
 
         install()
+        template.write_bytes(entry + b"\nNext release.\n")
+        install()
+        self.assertFalse((skill / "SKILL.md").is_symlink())
+        self.assertEqual((skill / "SKILL.md").read_bytes(), template.read_bytes())
         extra = skill / "user-notes"
         extra.write_text("keep")
         self.assertNotEqual(install("--remove", check=False).returncode, 0)

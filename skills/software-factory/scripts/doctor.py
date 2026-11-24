@@ -7,6 +7,12 @@ import subprocess
 import sys
 
 
+PROVIDERS = {
+    "codex": ("Codex CLI", "codex login"),
+    "claude": ("Claude Code CLI", "claude auth login"),
+}
+
+
 def probe(argv):
     try:
         proc = subprocess.run(
@@ -25,7 +31,7 @@ def diagnose(args):
         },
         "posix": {"available": os.name == "posix"},
     }
-    required = ["git"] if args.profile == "local" else ["git", "codex", "claude"]
+    required = ["git"] if args.profile == "local" else ["git", *PROVIDERS]
     for tool in required:
         exe = shutil.which(tool)
         rc, version = probe([exe, "--version"]) if exe else (2, "")
@@ -52,22 +58,19 @@ def diagnose(args):
         "checks": checks,
         "scope": "Local executables and reported login state. Model access requires a live turn.",
     }
-    if not ready and args.profile == "paired":
-        next_steps = []
-        for tool, name, login in (
-            ("codex", "Codex CLI", "codex login"),
-            ("claude", "Claude Code CLI", "claude auth login"),
-        ):
-            if not checks[tool]["path"]:
-                next_steps.append(f"Install {name} on PATH, then run `{login}`.")
-            elif not checks[tool]["available"]:
-                next_steps.append(f"Check `{tool} --version` and authenticate with `{login}`.")
-        if next_steps:
-            next_steps.append(
-                "Use `factory doctor --profile local` and the local evidence workflow "
-                "when provider CLIs are unavailable."
-            )
-            report["next_steps"] = next_steps
+    steps = [
+        f"Install {name} on PATH, then run `{login}`."
+        if checks[tool]["path"] is None
+        else f"Check `{tool} --version` and authenticate with `{login}`."
+        for tool, (name, login) in PROVIDERS.items()
+        if tool in checks and not checks[tool]["available"]
+    ]
+    if steps:
+        report["next_steps"] = [
+            *steps,
+            "Use `factory doctor --profile local` and the local evidence workflow "
+            "when provider CLIs are unavailable.",
+        ]
     return report, 0 if ready else 2
 
 
