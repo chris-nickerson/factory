@@ -50,6 +50,7 @@ The defaults are `~/.local/bin/factory` and `~/.agents/skills/software-factory`.
 | Request independent review | `start --require-review --base REF`, then `review` | A fresh, read-only Codex review of the selected change. |
 | Resolve a design or diagnosis | `consensus design` or `consensus diagnosis` | Independent GPT and Opus openings, numbered replies and acknowledgment of a specific proposal. [Protocol](skills/software-factory/references/consensus.md) |
 | Simplify a branch | `simplify --base REF --rounds N --task TEXT --check COMMAND` | One to three fresh Opus sessions. Factory checks each candidate before committing. Use `--push REMOTE` for per-round publication. [Procedure](skills/software-factory/references/simplify.md) |
+| Prepare or babysit a PR | [PR review workflow](skills/software-factory/references/delivery.md#pr-review-workflow) | The agent uses your forge and local review conventions, with built-in steps when no babysit skill is installed. |
 | Record a later correction | `outcome RUN_ID --note TEXT` | An observation attached to the checked revision. [Using feedback](skills/software-factory/references/local.md#later-outcomes) |
 
 Use `factory doctor --profile paired` to check the provider CLIs and their reported login state. Provider turns run until completion, provider failure or cancellation. Verification commands and Git operations have separate time limits. Cross-model runs send task context to the selected providers.
