@@ -69,3 +69,16 @@ We compared the original and revised local-workflow instructions on three small 
 | Verify a README display-name correction | Both answers kept verification to the documentation change. Neither explicitly checked the name against the project's source of truth. |
 
 One pair per request was graded. The first README pair ran in plain folders with the corrected text already present. We reran that request in Git checkouts containing the typo correction so the proposed diff check could inspect a real change. Only the second README pair went to the reviewer. This experiment tests the choice of a check. It supplies no estimate of task completion rates, token savings or runtime speedups. [Local workflow](../skills/software-factory/references/local.md#choose-the-baseline)
+
+## Model evidence and portable PR review
+
+Fresh Codex sessions chose verification for three briefs with the previous guide and the revised guide. Both selected a byte comparison with zero model calls for a CSV refactor, a single supported profile for a summarizer change, and both supported profiles for a booking behavior promised across profiles. The revised plan scored summaries against labeled source pairs and checked actual booking calls on ambiguous and unambiguous requests. These were planning exercises. The runs establish that the guidance can be applied across these cases. Both guides selected the same model coverage.
+
+We also gave Claude Opus the Factory guide and two disposable Git checkouts. A local forge simulated draft status, checks, reviews and replies. Git commits and pushes went to real local bare remotes. Neither case had a skill named `babysit`.
+
+| Setup | Observed result |
+| --- | --- |
+| No review skill. A reviewer supplied a valid negative-balance counterexample. | The agent promoted the draft, waited for CI, fixed the defect, tested and pushed the change, replied and resolved the thread. An independent check ran the pushed code. The first guide kept polling replacement CI past the one-round limit. With the revised stopping rule, the agent checked that CI once and reported it pending. |
+| A project supplied a differently named review skill. The same counterexample already passed. | The agent verified the result, used the project's required signoff, left the disputed thread open and kept the original head. |
+
+These exercises cover the agent workflow. Live forge permissions, hosted CI and merge queues remain specific to the target repository.

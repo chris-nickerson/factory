@@ -12,6 +12,14 @@
 - **Behavior-preserving refactor.** Capture a passing example on the original implementation. Replay the same inputs against the candidate and compare observable output, errors or side effects. If a contract crosses a release or process boundary, exercise the consumer that depends on it. For a saved format, keep a record written by the released version and open it with the candidate. A candidate reading its own output covers a different case.
 - **Performance claim.** Define the operation the user waits for, a representative workload and the metric. Check that both versions complete the same amount of correct work inside the timed interval, including deferred work and failures. Match meaningful settings and cache state, alternate repeated baseline and candidate runs, and report the unit, median and spread. If variation obscures the difference, report it as inconclusive. A contract can run the project's benchmark and retain its raw samples beside the correctness result.
 
+## When a model controls the outcome
+
+Identify the decision the user depends on and where it happens. Use deterministic checks for guarantees the runtime enforces, including any side effects it prevents. If success also depends on a model interpreting input, choosing an action or stopping, put a real model run through that decision in the contract. A reviewer model reading the diff or a scripted model response exercises a different boundary.
+
+Start with the project's eval runner, supported model and normal inputs. Choose a case that could disprove the claim and an observable outcome, such as the resulting artifact, action trace or scored response. A local fixture can stand in for external effects. Record what it replaces. Run a baseline or simpler candidate under the same conditions when claiming an improvement; a passing baseline leaves that improvement unproven.
+
+Use contrasting inputs when claiming generality. Include other supported models when their behavior matters to the claim, and repeat trials when estimating reliability. Record the revision, model and settings, cases, outcomes and trial counts. Limit the conclusion to what those runs sampled. If a required model or harness is unavailable, keep that claim open and finish the checks that can run.
+
 Example contract for a public library function, with a separate engineering check:
 
 ```json
