@@ -46,6 +46,7 @@ The defaults are `~/.local/bin/factory` and `~/.agents/skills/software-factory`.
 | Task | Entry point | Evidence |
 | --- | --- | --- |
 | Check a change | `start`, `check`, `status` | Frozen contract, command output and source fingerprint for each claim. |
+| Upgrade a dependency or clear a scanner alert | [Dependency updates](skills/software-factory/references/dependencies.md) | Resolved versions in each affected install root, a working consumer, and the scanner result on the updated revision when applicable. |
 | Request independent review | `start --require-review --base REF`, then `review` | A fresh, read-only Codex review of the selected change. |
 | Resolve a design or diagnosis | `consensus design` or `consensus diagnosis` | Independent GPT and Opus openings, numbered replies and acknowledgment of a specific proposal. [Protocol](skills/software-factory/references/consensus.md) |
 | Simplify a branch | `simplify --base REF --rounds N --task TEXT --check COMMAND` | One to three fresh Opus sessions. Factory checks each candidate before committing. Use `--push REMOTE` for per-round publication. [Procedure](skills/software-factory/references/simplify.md) |
