@@ -12,6 +12,16 @@
 - **Behavior-preserving refactor.** Capture a passing example on the original implementation. Replay the same inputs against the candidate and compare observable output, errors or side effects. If a contract crosses a release or process boundary, exercise the consumer that depends on it. For a saved format, keep a record written by the released version and open it with the candidate. A candidate reading its own output covers a different case.
 - **Performance claim.** Define the operation the user waits for, a representative workload and the metric. Check that both versions complete the same amount of correct work inside the timed interval, including deferred work and failures. Match meaningful settings and cache state, alternate repeated baseline and candidate runs, and report the unit, median and spread. If variation obscures the difference, report it as inconclusive. A contract can run the project's benchmark and retain its raw samples beside the correctness result.
 
+## Choose which tests to keep
+
+Start with the failure a caller would observe. Read the nearest tests and the repository’s testing requirements. If an existing check catches that failure, demonstrate it. Extend a case or strengthen an assertion when that closes the gap. Add a permanent test when it protects a distinct behavior worth maintaining. A one-time probe, migration rehearsal or comparison can stay in the run evidence.
+
+Use the cheapest boundary that can expose the fault. Drive the real consumer when the risk lies in wiring, storage, process lifetime or compatibility. Use a clock, fake or stub to control an external dependency when it preserves the behavior in question. Derive the expected result from the requirement, a trusted example or an invariant. Assert exact error text or payload fields only when callers depend on them. A useful test fails on a plausible wrong result and stays green after an internal refactor. For a disputed assertion, try both edits in a disposable checkout.
+
+Control time, randomness and shared state. Wait for observable events with bounded waits. Give randomized failures replayable inputs. Investigate a flaky failure before accepting a retry. Keep setup small enough that a failure points to the broken promise. Profile slow feedback before dropping coverage.
+
+When replacing or removing a test, identify the guarantee that survives elsewhere or the requirement that changed. Protect published formats, significant side effects and failure paths, including cases where exact bytes matter. Judge the suite by the regressions it catches and the cost of keeping it trustworthy. Test counts and coverage percentages alone cannot answer either question.
+
 ## When a model controls the outcome
 
 Identify the decision the user depends on and where it happens. Use deterministic checks for guarantees the runtime enforces, including any side effects it prevents. If success also depends on a model interpreting input, choosing an action or stopping, put a real model run through that decision in the contract. A reviewer model reading the diff or a scripted model response exercises a different boundary.

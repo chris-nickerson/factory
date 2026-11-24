@@ -18,6 +18,8 @@ Use the executable at `scripts/factory` relative to this skill's real directory,
 | Attach a real-world correction to a prior run | Use `factory outcome` with the relevant run and observed behavior. [Later outcomes](references/local.md#later-outcomes) |
 | Deliver an implementation with GPT and Opus | Compose consensus if requested, GPT implementation, the size-based Opus rounds, a fresh GPT review and final behavioral checks. [Delivery and continuation](references/delivery.md) |
 
+When implementing or reviewing a change, [choose which tests to keep](references/local.md#choose-which-tests-to-keep). Name the regression that existing coverage would miss before expanding the suite.
+
 Run Factory simplification on every nontrivial PR, including local changes intended for a PR. Skip it for trivial edits such as typos or mechanical formatting. Select one fresh Opus round for a straightforward, localized behavior change, two for a moderate change with interacting pieces, and three for a large change or one with substantial access, data, or compatibility risk. Use scope and consequences to choose the tier. Pass the count with `--rounds` and finish the scheduled rounds even when an earlier round makes no edits.
 
 Include comment review in the task brief for code changes. Review the changed comments and docstrings before final review, including any added by a repair. When pstack is available, use its no-comments workflow for the scoped diff. Preserve public contracts, license notices and verified external constraints. When a comment explains an internal workaround, inspect the code it points to and fix the cause within scope.

@@ -1,7 +1,6 @@
 """Exercise the installed command boundary, with real repos and independent oracles."""
 
 import json
-import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 import os
@@ -203,22 +202,6 @@ class FactoryTests(unittest.TestCase):
             finally:
                 server.shutdown()
                 thread.join()
-
-    def test_published_exact_simplification_prompt(self):
-        content = (
-            ROOT
-            / "skills/software-factory/references/reconsider-from-first-principles.v1.txt"
-        ).read_bytes()
-        self.assertEqual(
-            hashlib.sha256(content).hexdigest(),
-            "cc4605f2ca257e313a5e7ee05e619a224a933c80986b798cbbf30a0a81956acc",
-        )
-        self.assertEqual(
-            content,
-            (
-                ROOT / "docs/prompts/reconsider-from-first-principles.v1.txt"
-            ).read_bytes(),
-        )
 
     def test_review_includes_index_even_when_worktree_matches_base(self):
         run = self.start(extra=("--require-review",))

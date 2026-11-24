@@ -1,7 +1,9 @@
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
 import sys
@@ -31,9 +33,15 @@ if '--append-system-prompt-file' in args:
 (root/'observed.json').write_text(json.dumps(item))
 if case=='slow-success': time.sleep(1.2)
 if case=='slow':
-    subprocess.Popen([sys.executable, '-c',
-        "import time,pathlib; time.sleep(1.4); pathlib.Path('surviving-child').touch()"])
-    time.sleep(30)
+    child = '''import fcntl, os
+from pathlib import Path
+root = Path(os.environ["HARNESS_FIXTURE"])
+with (root / "grandchild").open("wb", buffering=0) as channel:
+    with (root / "release-child").open() as release:
+        channel.write(b"x")
+        fcntl.flock(release, fcntl.LOCK_SH)
+'''
+    subprocess.run([sys.executable, '-c', child], check=True)
 if pathlib.Path(sys.argv[0]).name=='claude':
     sid=option('--resume' if '--resume' in args else '--session-id')
     response={'type':'result','subtype':'success','is_error':False,'session_id':sid,
@@ -97,6 +105,8 @@ class HarnessTests(unittest.TestCase):
             hashlib.sha256(payload).hexdigest(),
             "cc4605f2ca257e313a5e7ee05e619a224a933c80986b798cbbf30a0a81956acc",
         )
+        published = Path(__file__).resolve().parents[1] / "docs/prompts" / prompt.name
+        self.assertEqual(published.read_bytes(), payload)
         response = self.turn(
             prompt=payload.decode(),
             context="Frozen base and acceptance checks",
@@ -165,22 +175,34 @@ class HarnessTests(unittest.TestCase):
             "run_turn('claude',repo=sys.argv[1],prompt='hello',edit=True,"
             "output_dir=sys.argv[2])"
         )
-        with patch.dict(
-            os.environ, {"HARNESS_CASE": "slow", "PYTHONPATH": str(SCRIPTS)}
-        ):
-            caller = subprocess.Popen(
-                [sys.executable, "-c", source, str(self.repo), str(directory)]
-            )
-            try:
-                marker = self.root / "observed.json"
-                deadline = time.monotonic() + 6
-                while not marker.exists() and time.monotonic() < deadline:
-                    time.sleep(0.02)
-                self.assertTrue(marker.exists())
-                os.kill(caller.pid, signal.SIGKILL)
-            finally:
-                caller.kill()
-                caller.wait(timeout=5)
+        fifo = self.root / "grandchild"
+        release = self.enterContext((self.root / "release-child").open("w"))
+        fcntl.flock(release, fcntl.LOCK_EX)
+        os.mkfifo(fifo)
+        reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+        self.addCleanup(os.close, reader)
+
+        def read_byte():
+            ready, _, _ = select.select([reader], [], [], 6)
+            self.assertTrue(ready, "Timed out waiting for the grandchild's pipe")
+            return os.read(reader, 1)
+
+        caller = subprocess.Popen(
+            [sys.executable, "-c", source, str(self.repo), str(directory)],
+            env={
+                **os.environ,
+                "HARNESS_CASE": "slow",
+                "PYTHONPATH": str(SCRIPTS),
+            },
+        )
+        try:
+            with fifo.open("wb", buffering=0):
+                self.assertEqual(read_byte(), b"x")
+            os.kill(caller.pid, signal.SIGKILL)
+            self.assertEqual(read_byte(), b"")
+        finally:
+            caller.kill()
+            caller.wait(timeout=5)
         receipt = directory / "receipt.json"
         deadline = time.monotonic() + 4
         while (
@@ -189,8 +211,6 @@ class HarnessTests(unittest.TestCase):
         ):
             time.sleep(0.03)
         self.assertEqual(json.loads(receipt.read_text())["status"], "failed")
-        time.sleep(1.5)
-        self.assertFalse((self.repo / "surviving-child").exists())
 
     def test_directory_cannot_be_reused_or_pollute_repo(self):
         self.turn()
