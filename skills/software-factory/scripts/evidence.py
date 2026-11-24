@@ -365,6 +365,8 @@ def review(args):
             "including staged hunks reversed by unstaged edits. The runtime checks exercise the working tree. "
             "For changed tests, identify the observable failure each adds or the guarantee a deletion "
             "would lose. Flag redundant coverage or fragile assertions with a concrete example. "
+            "If a change affects what a required check enforces, verify it still rejects a known "
+            "violation and accepts valid input under the intended rule. "
             "Check whether a changed comment conceals a workaround or a dropped comment carried a "
             "public contract or external constraint. Report a concrete consequence at the affected symbol. "
             "Give concrete findings and triggers. If you cannot actually inspect the whole change, report BLOCKED. "
