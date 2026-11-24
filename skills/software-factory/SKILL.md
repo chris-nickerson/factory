@@ -1,6 +1,6 @@
 ---
 name: software-factory
-description: Use Factory for evidence-backed engineering tasks, independent design or diagnosis with GPT and Opus, or size-based Opus simplification rounds on a branch. Supports dependency upgrades, advisory remediation, scoped review and runtime verification across repositories.
+description: Use Factory for evidence-backed engineering tasks, independent design or diagnosis with GPT and Opus, or size-based Opus simplification rounds on a branch. Supports dependency upgrades, advisory remediation, writing PR descriptions, scoped review and runtime verification across repositories.
 ---
 
 # Software Factory
@@ -13,6 +13,7 @@ Use the executable at `scripts/factory` relative to this skill's real directory,
 | Simplify a nontrivial PR | Use `factory simplify`. Select the push-each-round variant when requested. [Simplification procedure](references/simplify.md) |
 | Resolve a dependency alert (including Socket) or upgrade a package | Trace the resolved package, make a compatible update, and check the actual consumer. [Dependency updates](references/dependencies.md) |
 | Implement, verify, refactor, measure performance, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
+| Write or revise a PR description | Use the [PR writing guide](references/pr-descriptions.md) and the target repository's template. |
 | Prepare a PR for review or babysit one | Use the [PR review workflow](references/delivery.md#pr-review-workflow), including on hosts without a babysit skill. |
 | Attach a real-world correction to a prior run | Use `factory outcome` with the relevant run and observed behavior. [Later outcomes](references/local.md#later-outcomes) |
 | Deliver an implementation with GPT and Opus | Compose consensus if requested, GPT implementation, the size-based Opus rounds, a fresh GPT review and final behavioral checks. [Delivery and continuation](references/delivery.md) |

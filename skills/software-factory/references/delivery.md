@@ -8,7 +8,7 @@ After the final scheduled checkpoint, run the independent GPT review on the whol
 
 ## PR review workflow
 
-Use the target forge through the host's authenticated tools. Read applicable repository and user instructions, including any review skill the host exposes. Follow their rules for checks, evidence, reviewers, replies and queueing. Use the steps below wherever local instructions leave a gap. A fresh checkout with no review skill uses the same workflow.
+Use the target forge through the host's authenticated tools. Read applicable repository and user instructions, including any review skill the host exposes. Follow their rules for checks, evidence, reviewers, replies and queueing. Use the steps below wherever local instructions leave a gap. When opening a PR or updating its description, use the [PR writing guide](pr-descriptions.md). A fresh checkout with no review skill uses the same workflow.
 
 1. Establish the requested endpoint, ordering and any round limit. Before opening or editing a PR, verify the repository, base and remote head against any prior receipts. On resume, carry forward the completed rounds. Reuse the matching PR or open it in the requested state when the user asked for a PR and none exists. When asked to mark it ready, promote the intended draft and verify the transition. Respect an explicit draft or ready-only stopping point.
 2. Monitor current-head CI and requested reviews. Investigate a terminal failure as soon as the requested ordering permits, especially when it prevents reviewers from starting. Inspect job logs, review threads, PR comments and any applicable QA plan. Recheck the head before using a result. An approval on a different revision or a skipped check is evidence only for what it covered.
