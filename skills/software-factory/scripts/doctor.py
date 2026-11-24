@@ -46,12 +46,29 @@ def diagnose(args):
             )
         checks[tool] = details
     ready = all(row["available"] for row in checks.values())
-    return {
+    report = {
         "profile": args.profile,
         "status": "AVAILABLE" if ready else "BLOCKED",
         "checks": checks,
         "scope": "Local executables and reported login state. Model access requires a live turn.",
-    }, 0 if ready else 2
+    }
+    if not ready and args.profile == "paired":
+        next_steps = []
+        for tool, name, login in (
+            ("codex", "Codex CLI", "codex login"),
+            ("claude", "Claude Code CLI", "claude auth login"),
+        ):
+            if not checks[tool]["path"]:
+                next_steps.append(f"Install {name} on PATH, then run `{login}`.")
+            elif not checks[tool]["available"]:
+                next_steps.append(f"Check `{tool} --version` and authenticate with `{login}`.")
+        if next_steps:
+            next_steps.append(
+                "Use `factory doctor --profile local` and the local evidence workflow "
+                "when provider CLIs are unavailable."
+            )
+            report["next_steps"] = next_steps
+    return report, 0 if ready else 2
 
 
 def register(sub):

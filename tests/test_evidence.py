@@ -420,6 +420,79 @@ class FactoryTests(unittest.TestCase):
             subprocess.check_output([prefix / "bin/factory", "--version"], text=True),
         )
 
+    def test_migrate_default_skill_and_rollback_to_legacy_link(self):
+        clone = self.home / "factory-source"
+        shutil.copytree(ROOT / "skills", clone / "skills")
+        shutil.copy(ROOT / "install.py", clone / "install.py")
+        template = clone / "skills/software-factory/scripts/skill-entry.md"
+        entry = template.read_bytes()
+        template.unlink()
+        skill = self.home / ".agents/skills/software-factory"
+        cli = self.home / ".local/bin/factory"
+        cmd = [sys.executable, str(clone / "install.py")]
+
+        def install(*args, check=True):
+            return subprocess.run(
+                cmd + list(args),
+                env={**self.env, "HOME": str(self.home)},
+                check=check,
+                capture_output=True,
+            )
+
+        install()
+        self.assertTrue(skill.is_symlink())
+        original = cli.resolve()
+        template.write_bytes(entry)
+        install("--dry-run")
+        self.assertTrue(skill.is_symlink())
+        install()
+        self.assertTrue(skill.is_dir())
+        self.assertFalse(skill.is_symlink())
+        self.assertFalse((skill / "SKILL.md").is_symlink())
+        self.assertEqual((skill / "SKILL.md").read_bytes(), entry)
+        self.assertNotEqual(cli.resolve(), original)
+        self.assertEqual((skill / "scripts/factory").resolve(), cli.resolve())
+        self.assertEqual(
+            (skill / "release/SKILL.md").resolve(), cli.resolve().parents[1] / "SKILL.md"
+        )
+        install("--rollback")
+        self.assertTrue(skill.is_symlink())
+        self.assertEqual(cli.resolve(), original)
+
+        install()
+        extra = skill / "user-notes"
+        extra.write_text("keep")
+        self.assertNotEqual(install("--remove", check=False).returncode, 0)
+        self.assertEqual(extra.read_text(), "keep")
+        extra.unlink()
+        install("--remove")
+        self.assertFalse(skill.exists())
+        self.assertFalse(cli.is_symlink())
+
+    def test_doctor_explains_missing_providers_without_blocking_local_profile(self):
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "git").symlink_to(shutil.which("git"))
+
+        def doctor(profile, code):
+            result = subprocess.run(
+                [sys.executable, str(CLI), "doctor", "--profile", profile],
+                env={**self.env, "PATH": str(bin_dir)},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, code, result.stderr)
+            return json.loads(result.stdout)
+
+        paired = doctor("paired", 2)
+        self.assertEqual(paired["status"], "BLOCKED")
+        for tool in ("codex", "claude"):
+            self.assertIsNone(paired["checks"][tool]["path"])
+        steps = " ".join(paired["next_steps"])
+        for command in ("codex login", "claude auth login", "factory doctor --profile local"):
+            self.assertIn(command, steps)
+        self.assertEqual(doctor("local", 0)["status"], "AVAILABLE")
+
     def test_install_and_foreign_file_preservation(self):
         prefix = self.home / "user"
         skills = self.home / "agent/skills"

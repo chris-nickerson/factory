@@ -14,6 +14,7 @@ from workspace import git, release_id, write_json
 
 
 DEFAULT_ORIGIN = "https://github.com/chris-nickerson/factory.git"
+SKILL_ENTRY = "scripts/skill-entry.md"
 
 
 def git_environment():
@@ -64,6 +65,67 @@ def replace_link(link, target):
         os.replace(temporary, link)
 
 
+def skill_links(current):
+    return {
+        "release": current,
+        "references": current / "references",
+        "scripts": current / "scripts",
+    }
+
+
+def managed_skill(directory, current, source):
+    if not directory.is_dir() or directory.is_symlink():
+        return False
+    links = skill_links(current)
+    entry = directory / "SKILL.md"
+    templates = (current / SKILL_ENTRY, source / SKILL_ENTRY)
+    return (
+        {p.name for p in directory.iterdir()} == {"SKILL.md", *links}
+        and all(
+            link_target(directory / name) == str(target)
+            for name, target in links.items()
+        )
+        and entry.is_file()
+        and not entry.is_symlink()
+        and any(
+            template.is_file() and entry.read_bytes() == template.read_bytes()
+            for template in templates
+        )
+    )
+
+
+def install_default_skill(path, current, release, managed):
+    template = release / SKILL_ENTRY
+    if not template.is_file() and not managed:
+        if not path.is_symlink():
+            path.symlink_to(current)
+        return
+    if (
+        managed
+        and template.is_file()
+        and (path / "SKILL.md").read_bytes() == template.read_bytes()
+    ):
+        return
+    with tempfile.TemporaryDirectory(dir=path.parent) as temp:
+        stage = Path(temp) / "skill"
+        if template.is_file():
+            stage.mkdir()
+            shutil.copyfile(template, stage / "SKILL.md")
+            for name, target in skill_links(current).items():
+                (stage / name).symlink_to(target)
+        else:
+            stage.symlink_to(current)
+        previous = Path(temp) / "previous"
+        if os.path.lexists(path):
+            path.rename(previous)
+        try:
+            stage.rename(path)
+        except OSError:
+            if os.path.lexists(previous):
+                previous.rename(path)
+            raise
+
+
 def install(
     prefix,
     source,
@@ -78,10 +140,12 @@ def install(
     current = root / "current"
     manifest = root / "installation.json"
     saved = json.loads(manifest.read_text()) if manifest.exists() else {}
+    default_skill_root = (Path.home() / ".agents/skills").resolve()
+    default_skill = default_skill_root / "software-factory"
     skills = (
         skill_dirs
         or [Path(d) for d in saved.get("skill_dirs", [])]
-        or [Path.home() / ".agents/skills"]
+        or [default_skill_root]
     )
     skills = [d.expanduser().resolve() for d in skills]
     if saved and set(map(str, skills)) != set(saved["skill_dirs"]):
@@ -90,13 +154,20 @@ def install(
         )
     destinations = {prefix / "bin/factory": current / "scripts/factory"}
     destinations.update({d / "software-factory": current for d in skills})
-    for link, target in destinations.items():
-        if os.path.lexists(link) and link_target(link) != str(target):
-            raise ValueError(f"Path already owned by another installation: {link}")
     if os.path.lexists(current) and (
         not current.is_symlink() or current.resolve().parent != root / "releases"
     ):
         raise ValueError(f"Foreign current release: {current}")
+    managed = (
+        default_skill in destinations
+        and bool(saved)
+        and managed_skill(default_skill, current, source)
+    )
+    for link, target in destinations.items():
+        if link == default_skill and managed:
+            continue
+        if os.path.lexists(link) and link_target(link) != str(target):
+            raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
     if rollback:
         new = saved.get("previous")
@@ -130,7 +201,9 @@ def install(
         if not saved:
             raise ValueError("Missing installation manifest")
         for link in destinations:
-            if link.is_symlink():
+            if link == default_skill and managed:
+                shutil.rmtree(link)
+            elif link.is_symlink():
                 link.unlink()
         current.unlink(missing_ok=True)
         manifest.unlink()
@@ -158,7 +231,9 @@ def install(
             stage.rename(release)
     for link, target in destinations.items():
         link.parent.mkdir(parents=True, exist_ok=True)
-        if not link.is_symlink():
+        if link == default_skill:
+            install_default_skill(link, current, release, managed)
+        elif not link.is_symlink():
             link.symlink_to(target)
     previous = old if old and old != str(release) else saved.get("previous")
     write_json(

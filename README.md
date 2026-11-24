@@ -43,6 +43,8 @@ factory doctor
 
 The defaults are `~/.local/bin/factory` and `~/.agents/skills/software-factory`. To use the command in later shells, keep `~/.local/bin` on your PATH. Open your target checkout in a fresh agent session. Try **“Use Software Factory to reproduce this bug, fix it, and verify it through the public entry point.”** A shell-capable agent can also read the skill directly. For Claude Code project skills, install with a separate `--prefix` and `--skill-dir /path/to/project/.claude/skills`. [Agent entry point](skills/software-factory/SKILL.md)
 
+The default skill directory contains a regular `SKILL.md` so agents that skip linked directories can discover it. The entry opens the instructions for the same release as the CLI. If provider CLIs are unavailable, use `factory doctor --profile local` and the [local evidence workflow](skills/software-factory/references/local.md).
+
 | Task | Entry point | Evidence |
 | --- | --- | --- |
 | Check a change | `start`, `check`, `status` | Frozen contract, command output and source fingerprint for each claim. |
@@ -76,3 +78,5 @@ factory update
 ```
 
 Factory fetches into a temporary checkout and switches the executable and skill together through a single release link. Custom install locations are preserved. Archive installs default to the personal Factory GitHub repository. For an older release without the update command, run `python3 install.py` from an updated checkout once. The installer also accepts `--dry-run`, `--rollback` and `--remove`. Use the installation's original prefix.
+
+If an earlier install used a symlink at the default skill path, run `factory update` a second time to migrate it. The first run uses the old updater to install the new CLI. Running `python3 install.py` from an updated checkout performs both steps at once. Rolling back to a release that predates this layout restores the original symlink.
