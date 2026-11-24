@@ -363,6 +363,8 @@ def review(args):
             f"{base} scoped to {json.dumps(paths) if paths else 'the full checkout'} plus the listed untracked files. Read surrounding callers and applicable instructions. "
             "Inspect both git diff --cached BASE (base to index) and git diff (index to worktree), "
             "including staged hunks reversed by unstaged edits. The runtime checks exercise the working tree. "
+            "Check whether a changed comment conceals a workaround or a dropped comment carried a "
+            "public contract or external constraint. Report a concrete consequence at the affected symbol. "
             "Give concrete findings and triggers. If you cannot actually inspect the whole change, report BLOCKED. "
             "End with one line exactly VERDICT: CLEAR, VERDICT: FINDINGS, or VERDICT: BLOCKED.\n"
             f"Task: {data['task']}\nRequirements: "

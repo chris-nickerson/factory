@@ -18,6 +18,8 @@ Use the executable at `scripts/factory` relative to this skill's real directory,
 
 Run Factory simplification on every nontrivial PR, including local changes intended for a PR. Skip it for trivial edits such as typos or mechanical formatting. Select one fresh Opus round for a straightforward, localized behavior change, two for a moderate change with interacting pieces, and three for a large change or one with substantial access, data, or compatibility risk. Use scope and consequences to choose the tier. Pass the count with `--rounds` and finish the scheduled rounds even when an earlier round makes no edits.
 
+Review comments and docstrings in the change before final verification. When pstack is available, use its no-comments workflow for the scoped diff. Preserve public contracts, license notices and verified external constraints. When a comment explains an internal workaround, inspect the code it points to and fix the cause within scope.
+
 Preserve the requested stopping point. For investigation, establish the observed symptom, test a competing explanation and return the mechanism or missing discriminator. For local fixes, use the repository's normal entry points and separate required build checks from evidence of behavior. For a review-only task, keep the change read-only and substantiate each finding with its real trigger.
 
 Use the selected model and harness for a named profile. Verify any substituted method with the user if it changes a required assurance. Transport errors, missing access, stale evidence and partial coverage belong in the handoff. Use receipts to name the revision, evidence, verdict and remaining work.
