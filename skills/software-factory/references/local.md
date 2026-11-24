@@ -6,6 +6,16 @@
 4. Where required, run a fresh GPT review of the final candidate and rerun any affected verification after repairs. Inspect the raw logs and actual behavior. The CLI verifies the checks you defined. An incorrect check can still give you a false positive.
 5. When setup prevents a real observation, name the unavailable check. Keep that claim open. A GUI account assertion needs a real driver or an explicitly identified human observation. A mock response establishes behavior only up to the mocked boundary.
 
+## Consequential design choices
+
+When two viable approaches satisfy the request but differ materially in what users experience, what maintainers must support, or how costly the choice is to reverse, surface the choice while the caller can still influence it. Keep routine, reversible implementation details in the normal workflow.
+
+Start with the outcome the caller asked for and the constraints that actually bind it. Trace what the system must do to deliver that outcome. Identify which claims come from the code, a trace or a measurement, and which depend on assumptions. Where comparable systems or current engineering practice can inform the choice, consult primary sources, link them and explain which conditions carry over. Name any missing observation that could change the recommendation.
+
+Give the developer or supervising agent a short comparison in the conversation before implementing an option or freezing checks that select it. For each credible option, explain what users would notice and what the code would have to own. Recommend one and explain the deciding trade-off. If the caller already chose a policy, carry it forward. If they delegated the choice, identify it as the agent's decision and proceed. If an unresolved priority would change the choice and belongs to the caller, ask one focused question. Continue work and checks shared by the options while awaiting the answer. Carry the choice, who made it and why into the existing brief and PR.
+
+For example, a chat user wants to send another message as soon as an answer finishes. A trace showing the stream waiting on unused sandbox startup justifies testing that a text-only follow-up succeeds while startup is stalled. Both background warmup and startup on first use can pass that test. Warmup can shorten the wait at the first sandbox operation, but spends capacity on unused starts and needs an owner for work that outlives a turn. Starting on demand avoids that work and puts startup latency on the first operation. How often users need a sandbox and what that wait costs them would affect the recommendation. An assertion that a text-only turn starts zero sandboxes selects the on-demand policy. Freeze it only if that policy was chosen.
+
 ## Choose the baseline
 
 - **Bug fix or new behavior.** Exercise the reported failure or missing behavior through the public entry point. Replay the same case after the change.
