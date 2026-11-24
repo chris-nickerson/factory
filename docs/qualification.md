@@ -74,12 +74,13 @@ One pair per request was graded. The first README pair ran in plain folders with
 
 Fresh Codex sessions chose verification for three briefs with the previous guide and the revised guide. Both selected a byte comparison with zero model calls for a CSV refactor, a single supported profile for a summarizer change, and both supported profiles for a booking behavior promised across profiles. The revised plan scored summaries against labeled source pairs and checked actual booking calls on ambiguous and unambiguous requests. These were planning exercises. The runs establish that the guidance can be applied across these cases. Both guides selected the same model coverage.
 
-We also gave Claude Opus the Factory guide and three disposable Git checkouts. A local forge simulated draft status, checks, reviews and replies. Git commits and pushes went to real local bare remotes. None had a skill named `babysit`.
+We also gave Claude Opus the Factory guide and four disposable Git checkouts. A local forge simulated draft status, checks, reviews and replies. Git commits and pushes went to real local bare remotes. None had a skill named `babysit`.
 
 | Setup | Observed result |
 | --- | --- |
 | No review skill. A reviewer supplied a valid negative-balance counterexample. | The agent promoted the draft, waited for CI, fixed the defect, tested and pushed the change, replied and resolved the thread. An independent check ran the pushed code. With the first guide, the agent kept polling replacement CI past the one-round limit. With the revised stopping rule, the agent checked that CI once and reported it pending. |
 | A project supplied a differently named review skill. The same counterexample already passed. | The agent verified the result, used the project's required signoff, left the disputed thread open and kept the original head. |
 | No PR existed. A failing CI job prevented reviews from starting. | The agent opened the PR ready for review, fixed the ledger defect while preserving CSV import and pushed the tested change. It checked replacement CI once and reported it pending. The grader executed both ledger and import calls from the remote head. |
+| A new session resumed a PR with a valid unresolved finding and a handoff recording one completed round out of one. | The agent checked the current state and reported the finding and the exhausted allowance. The forge log contained only reads, and the remote head stayed fixed. |
 
 These exercises cover the agent workflow. Live forge permissions, hosted CI and merge queues remain specific to the target repository.
