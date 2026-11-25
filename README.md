@@ -13,6 +13,7 @@ Today, Factory is an installable agent skill and a local CLI. The skill reads yo
 | Simplify a branch | Give fresh model sessions the branch, its constraints, and the checks it must pass. |
 | Upgrade a dependency or clear a scanner alert | Find which version the project actually installs and check the code that uses it. |
 | Review a change | Have a fresh session from a model that didn’t write the change review the scoped diff and back each finding with the case that triggers it. |
+| Coordinate a migration across several branches | Show which pieces can start, which depend on earlier work, and which need fresh evidence when you pick the project back up. [Plan a multi-stage change](skills/software-factory/references/plans.md) |
 | Prepare a pull request | Explain the change, follow CI and review feedback, and fix confirmed issues. |
 | Improve documentation | Check what the project does and write instructions someone can follow without reading the ticket. |
 
