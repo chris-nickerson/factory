@@ -26,6 +26,7 @@ from checkpoints import (
 from harness import run_turn
 from supervision import captured_check, turn_stopped
 from workspace import (
+    snapshot,
     state_root,
     workspace_lock,
     write_json as save,
@@ -287,12 +288,15 @@ def consume_call(run, record, folder, recover):
 
 def check_candidate(run, record, folder):
     before, _ = candidate(run, folder)
+    working_inputs = snapshot(run["repo"], worktree_only=True)
     record["checks"] = []
     n = uuid.uuid4().hex[:10]
     attempt = {"tree": before, "checks": record["checks"]}
     record.setdefault("check_history", []).append(attempt)
     save(folder / "state.json", run)
     for i, cmd in enumerate(run["checks"], 1):
+        if rev(run["repo"], "HEAD") != record["input"]:
+            raise Pending("The checked-out revision changed before the next check.")
         path = folder / f"r{record['number']}-{n}-check-{i}.log"
         outcome, code, reason = captured_check(cmd, run["repo"], path, run["timeout"])
         record["checks"].append(
@@ -314,8 +318,28 @@ def check_candidate(run, record, folder):
             raise Pending(
                 "Checks changed the candidate or its revision. Inspect the changes and resume."
             )
-    record.update(tree=before, phase="assess")
+        if snapshot(run["repo"], worktree_only=True) != working_inputs:
+            raise Pending(
+                "Checks changed the working inputs. Inspect the changes and resume."
+            )
+    record.update(tree=before, working_inputs=working_inputs, phase="assess")
     save(folder / "state.json", run)
+
+
+def ensure_checked_working_inputs(run, record):
+    if "working_inputs" in record and (
+        snapshot(run["repo"], worktree_only=True) != record["working_inputs"]
+    ):
+        raise Pending("Working inputs changed after checks. Restore the checked candidate before resuming.")
+
+
+def ensure_publishable_checkpoint(run, record):
+    if changed(run):
+        raise Pending("Worktree or branch moved before the checkpoint was confirmed.")
+    ensure_checked_working_inputs(run, record)
+    check_branch(run)
+    if rev(run["repo"], "HEAD") != record["output"]:
+        raise Pending("Worktree or branch moved before the checkpoint was confirmed.")
 
 
 def execute(run, folder, recover=False, accepted_head=None):
@@ -370,7 +394,12 @@ def execute(run, folder, recover=False, accepted_head=None):
                 raise Pending(
                     "Candidate changed after checks. Inspect it before continuing."
                 )
-            contact(run, record, folder, "assess", assess_prompt(record, folder), "")
+            ensure_checked_working_inputs(run, record)
+            assessment = assess_prompt(record, folder)
+            check_branch(run)
+            if rev(run["repo"], "HEAD") != record["input"]:
+                raise Pending("The checked-out revision changed before assessment.")
+            contact(run, record, folder, "assess", assessment, "")
         elif phase == "repair":
             repairs = sum(c["kind"] == "repair" for c in record["calls"])
             if repairs >= 2:
@@ -387,15 +416,14 @@ def execute(run, folder, recover=False, accepted_head=None):
                 "",
             )
         elif phase == "commit":
+            if rev(run["repo"], "HEAD") == record["input"]:
+                ensure_checked_working_inputs(run, record)
             output = commit_checked_tree(run, record, folder, accepted_head)
             record.update(output=output, phase="publish")
             save(folder / "state.json", run)
             accepted_head = None
         elif phase == "publish":
-            if rev(run["repo"], "HEAD") != record["output"] or changed(run):
-                raise Pending(
-                    "Worktree or branch moved before the checkpoint was confirmed."
-                )
+            ensure_publishable_checkpoint(run, record)
             if run["remote"]:
                 expected = (
                     run["original_remote"]
@@ -403,6 +431,7 @@ def execute(run, folder, recover=False, accepted_head=None):
                     else run["rounds"][-2]["remote_head"]
                 )
                 record["remote_head"] = push_checkpoint(run, expected, record["output"])
+                ensure_publishable_checkpoint(run, record)
             record["phase"] = "done"
             record["finished"] = time.time()
             save(folder / "state.json", run)

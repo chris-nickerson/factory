@@ -1,10 +1,10 @@
 # Software Factory
 
-Factory is an agent skill and a local command-line tool for engineering work you can check. You ask your coding agent for something in plain language. The skill picks a procedure, and the `factory` command records evidence the agent cannot fake: which behavior passed, on which version of the code.
+Factory is an agent skill and a local command-line tool for engineering work you can check. You ask your coding agent for something in plain language. The skill picks a procedure, and the `factory` command records the result of a frozen check against a fingerprint of the workspace. The check, execution environment, and saved records rely on the trust you place in the local account.
 
 ## What you can ask for
 
-- **Fix a bug or build a change.** The agent writes down the expected behavior before it edits, reproduces the failure, then shows the same check passing on the final code. If the code changes after a check, the evidence goes stale.
+- **Fix a bug or build a change.** The agent writes down the expected behavior before it edits, reproduces the failure, then shows the same check passing on the final code. If the workspace fingerprint changes after a check, the evidence goes stale.
 - **Get a second opinion.** GPT and Claude Opus work through a design or a diagnosis independently, then argue until they agree on one proposal or agree that the evidence is missing.
 - **Simplify a branch.** One to three fresh Opus sessions reconsider the change from first principles. Factory checks and commits each round.
 - **Upgrade a dependency or clear a scanner alert.** The agent traces the resolved package and checks the code that actually uses it.
@@ -25,7 +25,7 @@ export PATH="$HOME/.local/bin:$PATH"
 factory doctor
 ```
 
-This installs `factory` in `~/.local/bin` and the skill in `~/.agents/skills/software-factory`. The default skill directory contains the full instructions in a regular `SKILL.md` so agents that skip directory symlinks can discover and read them. The skill and CLI follow the same active release. Add `~/.local/bin` to your `PATH` in your shell profile so later shells find it.
+This installs `factory` in `~/.local/bin` and the skill in `~/.agents/skills/software-factory`. The default skill directory contains the full instructions in a regular `SKILL.md` so agents that skip directory symlinks can discover and read them. Add `~/.local/bin` to your `PATH` in your shell profile so later shells find it.
 
 Run `factory doctor --profile paired` to check the Codex and Claude Code CLIs. If they are unavailable, use the [local evidence workflow](skills/software-factory/references/local.md).
 
@@ -61,13 +61,15 @@ printf 'pending\n' > "$demo/project/answer.txt"
 factory update
 ```
 
-Factory installs the latest `main` from the repository you installed from and lists the commits it brought in. Pass `--json` for a machine-readable report. To go back, run `python3 install.py --rollback` from your checkout with the original install prefix.
+Factory installs the latest `main` from the repository you installed from. It lists the incoming commits when it knows the previous source commit and the fetched history covers the range. Pass `--json` for a machine-readable report. To go back, run `python3 install.py --rollback` from an up-to-date checkout with the original install prefix.
+
+The CLI and skill files agree after a completed update or rollback. During the switch, a reader can see files from different releases. Let the command finish before starting a new agent session. If the command is interrupted, rerun it to finish the switch.
 
 If the default skill directory is still a symlink or its entry still points readers to `release/SKILL.md` after updating, run `factory update` again so the new CLI can migrate it. You can also run `python3 install.py` once from an updated checkout. For a legacy install with a custom prefix, migrate from the original home directory so Factory can identify the default skill path. Rolling back to a release that predates this layout restores the symlink.
 
 Keep the installed skill path out of Git's index. If the index tracks an older skill symlink, remove that entry before verifying changes in the checkout.
 
-Factory keeps run records outside your project, in `~/.local/state/software-factory` by default. Set `FACTORY_STATE_DIR` to move them. The records can include source code and command output.
+Factory keeps run records outside your project, in `~/.local/state/software-factory` by default. Set `FACTORY_STATE_DIR` to move them. Use the same state directory for all Factory invocations on one worktree so they share its lock and pending-run ownership. The records can include source code and command output.
 
 ## Learn more
 
@@ -81,4 +83,8 @@ Factory keeps run records outside your project, in `~/.local/state/software-fact
 python3 -B -m unittest discover -s tests -v
 ```
 
-The tests use real Git repositories, bare remotes and subprocesses. They run offline. The scripts in `evals/` run live sessions against real models and grade the result outside the edited checkout.
+The tests use real Git repositories, bare remotes and subprocesses. They run offline. The scripts in `evals/` exercise live model sessions or a browser with checks outside the edited checkout. See the [contributor guide](CONTRIBUTING.md) for where to make changes and how to verify them.
+
+## License
+
+Software Factory is available under the [MIT License](LICENSE). See the [security policy](SECURITY.md) to report a vulnerability privately.

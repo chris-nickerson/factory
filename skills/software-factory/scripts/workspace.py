@@ -176,8 +176,11 @@ def installed_skill_release(link, destination):
     return f"{content}:{modes}"
 
 
-def snapshot(repo, *, plain_directory=False):
-    """Hash Git's source set, index and HEAD, or all files in a plain directory."""
+def snapshot(repo, *, plain_directory=False, worktree_only=False):
+    """Hash Git's source set, index and HEAD, or all files in a plain directory.
+
+    A worktree-only fingerprint omits Git metadata and hashes symlinks as links.
+    """
     repo = Path(repo).resolve()
     digest = hashlib.sha256()
 
@@ -191,9 +194,11 @@ def snapshot(repo, *, plain_directory=False):
     )
     gitlinks = set()
     if is_git:
-        field(git(repo, "rev-parse", "--verify", "HEAD", check=False).stdout.strip())
+        if not worktree_only:
+            field(git(repo, "rev-parse", "--verify", "HEAD", check=False).stdout.strip())
         index = git(repo, "ls-files", "--stage", "-z").stdout
-        field(index)
+        if not worktree_only:
+            field(index)
         paths = set()
         for entry in index.split(b"\0"):
             if entry:
@@ -217,19 +222,32 @@ def snapshot(repo, *, plain_directory=False):
         }
 
     for name in sorted(paths):
-        field(name)
         p = repo / os.fsdecode(name)
         if p.parent.resolve() != p.parent:
-            field(b"replaced ancestor")
+            if not worktree_only:
+                field(name)
+                field(b"replaced ancestor")
             continue
         try:
             mode = p.lstat().st_mode
         except (FileNotFoundError, NotADirectoryError):
-            field(b"missing")
+            if not worktree_only:
+                field(name)
+                field(b"missing")
             continue
+        if (
+            worktree_only
+            and stat.S_ISDIR(mode)
+            and name not in gitlinks
+            and not os.path.lexists(p / ".git")
+        ):
+            continue
+        field(name)
         field(str(mode).encode())
         if stat.S_ISLNK(mode):
             field(os.fsencode(os.readlink(p)))
+            if worktree_only:
+                continue
             try:
                 dest = p.resolve(strict=True)
             except FileNotFoundError:
@@ -255,7 +273,13 @@ def snapshot(repo, *, plain_directory=False):
                 )
         elif name in gitlinks and p.is_dir():
             # ls-files in a deinitialized submodule would discover the parent repo.
-            field(snapshot(p, plain_directory=not (p / ".git").exists()).encode())
+            field(
+                snapshot(
+                    p,
+                    plain_directory=not (p / ".git").exists(),
+                    worktree_only=worktree_only,
+                ).encode()
+            )
         elif stat.S_ISREG(mode):
             with p.open("rb") as stream:
                 field(hashlib.file_digest(stream, "sha256").digest())

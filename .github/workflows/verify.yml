@@ -18,3 +18,12 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -B -m unittest discover -s tests -v
       - run: ./factory doctor --profile local
+      - name: Qualify upgrade from the initial Factory revision
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.11'
+        shell: bash
+        run: |
+          baseline=42c934c640320d32b4772a2c6c5b3b1f3d9989dc
+          archived_checkout=$(mktemp -d)
+          git fetch --no-tags --depth=1 origin "$baseline"
+          git archive "$baseline" | tar -x -C "$archived_checkout"
+          python -B evals/qualify_upgrade.py "$archived_checkout"

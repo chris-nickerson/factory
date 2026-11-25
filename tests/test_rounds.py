@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,10 @@ if fresh and mode == "regression":
     Path("calc.py").write_text("def add(a,b): return a - b\\n")
 if fresh and mode == "outside":
     Path("untouched").write_text("unexpected change")
+if fresh and mode == "replace-file":
+    Path("pkg").unlink()
+    Path("pkg").mkdir()
+    Path("pkg/entry.txt").write_text("ready")
 with log.open("a") as stream:
     print(json.dumps({"session":session,"fresh":fresh,"mode":args[args.index("--permission-mode")+1],"prompt":prompt.decode()}),file=stream)
 print(json.dumps({"subtype":"success","session_id":session,"modelUsage":{"claude-opus-fixture":{}},
@@ -660,6 +665,202 @@ class RoundsTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("Checks changed", report["error"])
         self.assertEqual(self.git("rev-list", "--count", "trunk..HEAD"), "1")
+
+    def test_checks_cannot_change_bytes_git_normalizes(self):
+        (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
+        self.git("add", ".gitattributes")
+        self.git("commit", "-qm", "Normalize source line endings")
+        before = self.git("rev-parse", "HEAD")
+        convert = shlex.join(
+            [
+                sys.executable,
+                "-c",
+                "from pathlib import Path; p = Path('calc.py'); "
+                "p.write_bytes(p.read_bytes().replace(b'\\n', b'\\r\\n'))",
+            ]
+        )
+        with patch.dict(os.environ, FIXTURE_MODE="noop"):
+            code, report = self.invoke(
+                *self.start, "--rounds", "1", "--check", convert, "--push", "fixture"
+            )
+        self.assertEqual(code, 2, report)
+        self.assertIn("Checks changed", report["error"])
+        self.assertEqual(self.git("diff", "--", "calc.py"), "")
+        self.assertIn(b"\r\n", (self.repo / "calc.py").read_bytes())
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+    def test_checkpoint_accepts_replacing_a_tracked_file_with_a_directory(self):
+        (self.repo / "pkg").write_text("old layout")
+        self.git("add", "pkg")
+        self.git("commit", "-qm", "Record the original layout")
+        with patch.dict(os.environ, FIXTURE_MODE="replace-file"):
+            code, report = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 0, report)
+        self.assertEqual(self.git("show", "HEAD:pkg/entry.txt"), "ready")
+        self.assertEqual(report["rounds"][0]["remote_head"], self.git("rev-parse", "HEAD"))
+
+    def test_checks_stop_if_head_moves_before_working_input_snapshot(self):
+        self.assert_head_move_blocks_checks(snapshot_number=1, first_runs=False)
+
+    def test_checks_stop_if_head_moves_during_post_check_snapshot(self):
+        self.assert_head_move_blocks_checks(snapshot_number=2, first_runs=True)
+
+    def assert_head_move_blocks_checks(self, *, snapshot_number, first_runs):
+        first = self.folder / "first-check-ran"
+        later = self.folder / "later-check-ran"
+        snapshot = rounds.snapshot
+        before = self.git("rev-parse", "HEAD")
+        observed_snapshots = 0
+
+        def move_head_during_snapshot(*args, **kwargs):
+            nonlocal observed_snapshots
+            observed_snapshots += 1
+            if observed_snapshots == snapshot_number:
+                self.git("commit", "--allow-empty", "-qm", "Independent same-tree commit")
+            return snapshot(*args, **kwargs)
+
+        with (
+            patch.dict(os.environ, FIXTURE_MODE="noop"),
+            patch.object(rounds, "snapshot", side_effect=move_head_during_snapshot),
+        ):
+            code, report = self.invoke(
+                *self.start[:-1], shlex.join(["touch", str(first)]),
+                "--rounds", "1", "--check", shlex.join(["touch", str(later)])
+            )
+        self.assertEqual(code, 2, report)
+        self.assertIn("revision changed", report["error"])
+        self.assertNotEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertEqual(first.exists(), first_runs)
+        self.assertFalse(later.exists())
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+    def test_head_move_during_assessment_fingerprint_blocks_provider(self):
+        state, moved = self.move_head_during_fingerprint("assess")
+        self.assertEqual(state["phase"], "assess")
+        self.assertEqual(self.git("rev-parse", "HEAD"), moved)
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+    def test_head_move_during_pre_push_fingerprint_blocks_push(self):
+        state, moved = self.move_head_during_fingerprint("publish")
+        self.assertEqual(state["phase"], "publish")
+        self.assertEqual(self.git("rev-parse", "HEAD"), moved)
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+
+    def test_head_move_during_post_push_fingerprint_blocks_confirmation(self):
+        state, moved = self.move_head_during_fingerprint("publish", after_push=True)
+        self.assertEqual(state["phase"], "publish")
+        self.assertEqual(self.git("rev-parse", "HEAD"), moved)
+        remote = self.git("ls-remote", "fixture", "refs/heads/feature")
+        self.assertEqual(remote.split()[0], state["output"])
+
+    def move_head_during_fingerprint(self, phase, *, after_push=False):
+        check = rounds.ensure_checked_working_inputs
+        moved = None
+
+        def check_with_head_move(run, record):
+            nonlocal moved
+            check(run, record)
+            if record["phase"] == phase and moved is None:
+                published = bool(record.get("remote_head"))
+                if published == after_push:
+                    self.git("commit", "--allow-empty", "-qm", "Independent same-tree commit")
+                    moved = self.git("rev-parse", "HEAD")
+
+        with patch.object(rounds, "ensure_checked_working_inputs", check_with_head_move):
+            code, report = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 2, report)
+        self.assertIsNotNone(moved)
+        saved = rounds.work_root() / report["run"] / "state.json"
+        return json.loads(saved.read_text())["rounds"][0], moved
+
+    def test_resume_rejects_git_hidden_drift_after_checks(self):
+        (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
+        self.git("add", ".gitattributes")
+        self.git("commit", "-qm", "Normalize source line endings")
+        source = self.repo / "calc.py"
+        original = source.read_bytes()
+        contact = rounds.contact
+
+        def interrupt_assessment(run, record, folder, kind, *args):
+            if kind == "assess":
+                raise rounds.Pending("Interrupted before assessment")
+            return contact(run, record, folder, kind, *args)
+
+        with (
+            patch.dict(os.environ, FIXTURE_MODE="noop"),
+            patch.object(rounds, "contact", side_effect=interrupt_assessment),
+        ):
+            code, pending = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 2, pending)
+        source.write_bytes(original.replace(b"\n", b"\r\n"))
+        code, blocked = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 2, blocked)
+        self.assertEqual(self.git("diff", "--", "calc.py"), "")
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+        source.write_bytes(original)
+        code, complete = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 0, complete)
+        self.assertEqual(complete["rounds"][0]["remote_head"], self.git("rev-parse", "HEAD"))
+
+    def test_resume_does_not_push_when_checked_bytes_change_after_commit(self):
+        (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
+        self.git("add", ".gitattributes")
+        self.git("commit", "-qm", "Normalize source line endings")
+        before = self.git("rev-parse", "HEAD")
+        with patch.object(
+            rounds, "push_checkpoint", side_effect=rounds.Pending("Interrupted before push")
+        ):
+            code, pending = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 2, pending)
+        checkpoint = self.git("rev-parse", "HEAD")
+        self.assertNotEqual(checkpoint, before)
+
+        source = self.repo / "calc.py"
+        original = source.read_bytes()
+        source.write_bytes(original.replace(b"\n", b"\r\n"))
+        self.assertEqual(self.git("diff", "--", "calc.py"), "")
+        code, blocked = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 2, blocked)
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+
+        source.write_bytes(original)
+        code, complete = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 0, complete)
+        self.assertEqual(complete["rounds"][0]["remote_head"], checkpoint)
+        self.assertEqual(len(self.turns.read_text().splitlines()), 2)
+
+    def test_push_hook_raw_drift_leaves_checkpoint_pending(self):
+        (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
+        self.git("add", ".gitattributes")
+        self.git("commit", "-qm", "Normalize source line endings")
+        hook = self.repo / ".git/hooks/pre-push"
+        convert = shlex.join(
+            [
+                sys.executable, "-c",
+                "from pathlib import Path; p = Path('calc.py'); "
+                "p.write_bytes(p.read_bytes().replace(b'\\n', b'\\r\\n'))",
+            ]
+        )
+        hook.write_text(f"#!/bin/sh\nexec {convert}\n")
+        hook.chmod(0o755)
+        code, pending = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 2, pending)
+        self.assertIn("Working inputs changed", pending["error"])
+        checkpoint = self.git("rev-parse", "HEAD")
+        remote = self.git("ls-remote", "fixture", "refs/heads/feature")
+        self.assertEqual(remote.split()[0], checkpoint)
+
+        source = self.repo / "calc.py"
+        self.assertIn(b"\r\n", source.read_bytes())
+        source.write_bytes(source.read_bytes().replace(b"\r\n", b"\n"))
+        code, complete = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 0, complete)
+        self.assertEqual(complete["rounds"][0]["remote_head"], checkpoint)
+        self.assertEqual(len(self.turns.read_text().splitlines()), 2)
 
     def test_scope_and_dirty_tree_preserve_work(self):
         with patch.dict(os.environ, FIXTURE_MODE="outside"):

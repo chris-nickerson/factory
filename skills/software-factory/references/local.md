@@ -81,7 +81,7 @@ factory status "$run"
 
 The `run` field identifies the run for later commands. The `--timeout` option on `factory check` limits each contract command. If your host limits how long it waits for a shell call, start the check in a persistent background session and collect its output and exit status from that session.
 
-A run tracks the whole Git source set, including staged content, unstaged changes and unignored new files. In plain folders it hashes the whole tree. Put generated outputs in the repository's established ignored directories or outside it. A check that changes the subject cannot establish a pass. Receipts persist under `FACTORY_STATE_DIR` or the user's XDG state directory. One local Factory operation locks a workspace at a time. Other applications can still write to it.
+A run tracks the Git source set, including staged content, tracked working files and unignored new files. In plain folders it hashes the file tree. Put generated outputs in the repository's established ignored directories or outside it. If the subject differs after a check, that attempt is blocked. Receipts persist under `FACTORY_STATE_DIR` or the user's XDG state directory. Use the same state directory for all invocations on one worktree so Factory coordinates them through the same lock. Other applications can still write to it.
 
 For build-only, configuration, documentation or unusual tasks, choose a fitting consumer or artifact check. An independent Python oracle can call any installed runtime. A target can declare repeatable command candidates as argument arrays in the `[checks]` table of `software-factory.toml`. Inspect reads those declarations, and the agent selects an appropriate check for the contract.
 

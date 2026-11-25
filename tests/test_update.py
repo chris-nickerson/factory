@@ -9,11 +9,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills/software-factory/scripts"))
-from installation import render_update  # noqa: E402
+import installation  # noqa: E402
 
 
 def git(repo, *args):
@@ -108,6 +109,7 @@ class UpdateTests(unittest.TestCase):
     def test_reports_the_commits_each_update_brings_in(self):
         first = self.update()
         self.assertIsNone(first["previous"])
+        subprocess.run(self.installer, capture_output=True, check=True)
         spec = self.source / "skills/software-factory/SKILL.md"
         for subject in ("Teach reviewers about retries", "Show what changed"):
             spec.write_text(subject)
@@ -120,11 +122,51 @@ class UpdateTests(unittest.TestCase):
             [c["subject"] for c in report["changes"]],
             ["Show what changed", "Teach reviewers about retries"],
         )
-        text = render_update(report, color=False)
+        text = installation.render_update(report, color=False)
         self.assertIn(f"Factory updated  {first['commit'][:7]} → {report['commit'][:7]}", text)
         self.assertIn("Teach reviewers about retries", text)
         self.assertNotIn("\033[", text)
-        self.assertIn("Factory is up to date", render_update(self.update(), color=False))
+        self.assertIn(
+            "Factory is up to date", installation.render_update(self.update(), color=False)
+        )
+
+    def test_retry_of_interrupted_rollback_finishes_the_original_target(self):
+        prefix = self.home / ".local"
+        skill = self.home / ".agents/skills/software-factory"
+        root = prefix / "lib/software-factory"
+        current = root / "current"
+        manifest = root / "installation.json"
+        source = self.source / "skills/software-factory"
+        spec = source / "SKILL.md"
+        installer = [sys.executable, str(self.source / "install.py"), "--rollback"]
+        env = {**os.environ, "HOME": str(self.home)}
+        first = git(self.source, "rev-parse", "HEAD")
+        with patch.object(Path, "home", return_value=self.home):
+            installation.install(prefix, source, commit=first)
+            spec.write_text("second release\n")
+            git(self.source, "commit", "-qam", "Second release")
+            second = git(self.source, "rev-parse", "HEAD")
+            installation.install(prefix, source, commit=second)
+
+            for boundary in ("replace_link", "publish_default_skill"):
+                with self.subTest(boundary=boundary):
+                    with (
+                        patch.object(installation, boundary, side_effect=KeyboardInterrupt),
+                        self.assertRaises(KeyboardInterrupt),
+                    ):
+                        installation.install(prefix, source, rollback=True)
+
+                    completed = subprocess.run(installer, env=env, capture_output=True)
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    installed = json.loads(manifest.read_text())
+                    self.assertEqual(installed["commit"], first)
+                    self.assertNotIn("pending_release", installed)
+                    self.assertEqual((skill / "SKILL.md").read_bytes(), (current / "SKILL.md").read_bytes())
+                    self.assertNotEqual((skill / "SKILL.md").read_text(), spec.read_text())
+
+                    subprocess.run(installer, env=env, capture_output=True, check=True)
+                    self.assertEqual(json.loads(manifest.read_text())["commit"], second)
+                    self.assertEqual((skill / "SKILL.md").read_text(), spec.read_text())
 
     def test_missing_main_and_invalid_release_leave_installation_intact(self):
         git(self.remote, "tag", "main", "refs/heads/main")

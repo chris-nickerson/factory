@@ -134,14 +134,20 @@ def publish_default_skill(path, current, entry):
 def settle_release(configuration, pending):
     configuration.update(
         previous=pending["previous"],
+        previous_commit=pending.get("previous_commit"),
         previous_full_entry=pending.get("previous_full_entry", False),
         commit=pending["commit"],
     )
 
 
-def read_installation(manifest, current):
+def read_installation(manifest, current, *, rollback=False):
     saved = json.loads(manifest.read_text()) if manifest.exists() else {}
-    pending = saved.pop("pending_release", None)
+    pending = saved.get("pending_release")
+    if rollback and pending and pending.get("action") == "rollback":
+        if link_target(current) not in (pending["previous"], pending["release"]):
+            raise ValueError("Current release differs from the interrupted rollback")
+        return saved
+    saved.pop("pending_release", None)
     if pending and link_target(current) == pending["release"]:
         settle_release(saved, pending)
     return saved
@@ -161,7 +167,7 @@ def install(
     root = prefix / "lib/software-factory"
     current = root / "current"
     manifest = root / "installation.json"
-    saved = read_installation(manifest, current)
+    saved = read_installation(manifest, current, rollback=rollback)
     default_skill_root = (Path.home() / ".agents/skills").resolve()
     skills = (
         skill_dirs
@@ -257,8 +263,10 @@ def install_release(
         elif not detached:
             raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
+    interrupted_rollback = saved.get("pending_release")
     if rollback:
         new = saved.get("previous")
+        commit = saved.get("previous_commit")
         if not new:
             raise ValueError("No previous release recorded")
         release = Path(new)
@@ -328,6 +336,7 @@ def install_release(
     configuration = dict(
         skill_dirs=list(map(str, skills)),
         previous=saved.get("previous"),
+        previous_commit=saved.get("previous_commit"),
         previous_full_entry=saved.get("previous_full_entry", False),
         commit=saved.get("commit"),
         update_origin=origin or saved.get("update_origin") or DEFAULT_ORIGIN,
@@ -335,6 +344,7 @@ def install_release(
     if registration:
         configuration["skill_entry"] = registration
     entry = None
+    publish = False
     if default_skill in destinations:
         template = release / "SKILL.md"
         if rollback and not saved.get("previous_full_entry"):
@@ -343,30 +353,33 @@ def install_release(
         if template.is_file():
             entry = template.read_bytes()
             registration = {"path": str(default_skill), "sha256": digest(entry)}
-            if entry == installed_entry:
-                entry = None
-            elif installed_entry is not None:
+            publish = entry != installed_entry
+            if publish and installed_entry is not None:
                 registration["replacing"] = digest(installed_entry)
             configuration["skill_entry"] = registration
-        elif link_target(default_skill) != str(current):
-            publish_default_skill(default_skill, current, None)
+        else:
+            publish = link_target(default_skill) != str(current)
     for link, target in destinations.items():
         if link != default_skill and not link.is_symlink():
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to(target)
     switching = old and old != str(release)
-    if switching:
+    if interrupted_rollback:
+        configuration["pending_release"] = interrupted_rollback
+    elif switching:
         configuration["pending_release"] = {
+            "action": "rollback" if rollback else "install",
             "release": str(release),
             "previous": old,
+            "previous_commit": saved.get("commit"),
             "previous_full_entry": has_entry and not (Path(old) / LEGACY_STUB).is_file(),
             "commit": commit,
         }
-    else:
+    elif commit is not None:
         configuration["commit"] = commit
     write_json(manifest, configuration)
     replace_link(current, release)
-    if entry is not None:
+    if publish:
         publish_default_skill(default_skill, current, entry)
     pending = configuration.pop("pending_release", None)
     if pending:
