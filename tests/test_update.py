@@ -12,6 +12,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "skills/software-factory/scripts"))
+from installation import render_update  # noqa: E402
 
 
 def git(repo, *args):
@@ -102,6 +104,27 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual((self.caller / "wip").read_text(), "in progress")
         subprocess.run(self.installer + ["--rollback"], capture_output=True, check=True)
         self.assertEqual(self.skill.resolve(), self.original)
+
+    def test_reports_the_commits_each_update_brings_in(self):
+        first = self.update()
+        self.assertIsNone(first["previous"])
+        spec = self.source / "skills/software-factory/SKILL.md"
+        for subject in ("Teach reviewers about retries", "Show what changed"):
+            spec.write_text(subject)
+            git(self.source, "commit", "-qam", subject)
+        git(self.source, "push", "-q", "origin", "main")
+        report = self.update()
+        self.assertEqual(report["status"], "updated")
+        self.assertEqual(report["previous"], first["commit"])
+        self.assertEqual(
+            [c["subject"] for c in report["changes"]],
+            ["Show what changed", "Teach reviewers about retries"],
+        )
+        text = render_update(report, color=False)
+        self.assertIn(f"Factory updated  {first['commit'][:7]} → {report['commit'][:7]}", text)
+        self.assertIn("Teach reviewers about retries", text)
+        self.assertNotIn("\033[", text)
+        self.assertIn("Factory is up to date", render_update(self.update(), color=False))
 
     def test_missing_main_and_invalid_release_leave_installation_intact(self):
         git(self.remote, "tag", "main", "refs/heads/main")

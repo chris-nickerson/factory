@@ -75,4 +75,4 @@ To switch an existing installation to the latest version on its recorded origin'
 factory update
 ```
 
-Factory fetches into a temporary checkout and switches the executable and skill together through a single release link. Custom install locations are preserved. Archive installs default to the personal Factory GitHub repository. For an older release without the update command, run `python3 install.py` from an updated checkout once. The installer also accepts `--dry-run`, `--rollback` and `--remove`. Use the installation's original prefix.
+In a terminal it shows the commits the update brought in; pass `--json` (or pipe the output) for a machine-readable report. Factory fetches into a temporary checkout and switches the executable and skill together through a single release link. Custom install locations are preserved. Archive installs default to the personal Factory GitHub repository. For an older release without the update command, run `python3 install.py` from an updated checkout once. The installer also accepts `--dry-run`, `--rollback` and `--remove`. Use the installation's original prefix.
