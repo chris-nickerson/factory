@@ -1,6 +1,6 @@
 # Try the simpler path against its caller
 
-Use this pilot to decide whether a short change to the task brief saves owner time. It uses the usual implementation, simplification and independent review procedures. Use the candidate brief only in the experimental arm.
+Use this pilot to decide whether a short change to the task brief saves owner time. It uses the usual implementation, simplification and independent review procedures. Use the candidate brief only in the candidate arm.
 
 ## Candidate task brief
 
@@ -12,9 +12,9 @@ For example, an assessment written by an older release can reach the commit step
 
 ## Set up both arms
 
-The owner delegates the task and reviews its result. The operator runs the comparison and records the evidence. One person can do both jobs. Count all active owner time, including trial setup, and report whether the owner knew the assignment.
+The owner delegates the task and reviews its result. The operator runs the comparison and records the evidence. One person can do both jobs. Split setup minutes shared by a pair equally between its arms and charge arm-specific work to the arm that incurred it. Report whether the owner knew the assignment.
 
-- Before seeing output, select four wanted tasks: a local behavior change, a multi-caller change, a compatibility or external-tool change and a routine control. Choose value weights up front, using equal weights for equally valuable tasks.
+- Before seeing output, select four wanted tasks: a local behavior change, a multi-caller change, a compatibility or external-tool change and a routine edit. Fix value weights, delivery deadlines and defect severity criteria before assignment. Use equal weights for equally valuable tasks.
 - For each task, reserve a realistic follow-on request and executable acceptance checks for both stages. Keep them outside the checkout and hidden from the initial agents.
 - Match harness, model, allowed tools, ordinary checks, simplification rounds and budgets. Enforce time and spend limits outside Factory using the same clock and provider limits for both arms.
 - Give each evidence run the ordinary task-specific acceptance brief in `factory start --task`. Factory includes this text in its review prompt. Only the candidate author and simplifier receive the extra paragraph. Use neutral worktree and branch names. Keep the author's handoff and trial record outside the blind reviewer's inputs.
@@ -25,7 +25,8 @@ Run each of the four tasks in both arms, on separate copies of the same revision
 
 1. Run the hidden initial check on each delivered revision. Record failures as well as passes.
 2. Give a fresh agent each passing checkout and its reserved follow-on request. Use the ordinary maintenance workflow for both arms.
-3. Run the hidden follow-on check and replay the original check on the modified checkout. A reviewer blind to assignment judges both stages against the frozen contracts. Credit each task once per arm only if both stages and the required delivery reviews pass within budget. Either copy can earn pilot credit without shipping.
+3. Run the hidden follow-on check and replay the original check on the modified checkout.
+4. A reviewer blind to assignment judges both stages against the frozen contracts. Credit each task once per arm only if both stages and the required delivery reviews pass within budget. Either copy can earn pilot credit without shipping.
 
 Keep one record per attempt outside the checkout. Include the task, arm, budget, revisions, run IDs, owner minutes by activity, interruptions, elapsed time per stage, time to a correct follow-on, unique defects and repair cycles. Record tokens from the harness usage logs and dollars from billing or a common dated price schedule. Include failed runs, retries, timeouts and reverts in time and spend. Mark unavailable usage and censored times explicitly.
 
@@ -35,12 +36,12 @@ Compare total credited value divided by all owner hours in each arm. Keep the cu
 
 - At least 20% more credited value per owner hour and fewer owner minutes on at least three of four pairs.
 - At least as many successful tasks and no new serious defect or broken contract.
-- At most 10% higher median initial elapsed time, median time to a correct follow-on and total model spend. Apply the 10% limit to owner minutes on the routine control as well.
+- At most 10% higher median initial elapsed time, median time to a correct follow-on and total model spend. Apply the 10% limit to owner minutes on the routine edit as well.
 
-If either arm records zero owner hours or the current arm earns zero value, the percentage gain is undefined. Keep the current workflow in that case or when missing observations could reverse the decision.
+Four pairs screen for an effect. If baseline variation could explain the gain, repeat the noisy cases with fresh sessions before advancing. Include repeats in the costs and credit each task only once. If either arm records zero owner hours or the baseline arm earns zero value, the percentage gain is undefined. Keep the current workflow in that case or when missing observations could reverse the decision.
 
 ## Confirm on shipped work
 
 Enroll eight new real tasks, one pair for each of the four task types. Match the tasks within each pair on scope and preassigned value, then randomly assign one to each arm. Run each task once. Use the same setup, blinding, budgets, acceptance checks and attempt records as the pilot. Run the follow-on stage on an isolated copy of each delivered revision.
 
-Thirty days after each change ships, credit its value only if both stages passed and the shipped change still serves its requested outcome with no unresolved corrective work. Unshipped tasks earn zero at the agreed delivery deadline. Charge repair effort to its original arm and report unknown exposure. Apply the pilot thresholds to these four new pairs. If they pass, adopt only for enrolled task types whose candidate succeeded and used fewer owner minutes than its matched control. Treat this as a scoped rollout and keep recording later outcomes.
+Thirty days after each change ships, credit its value only if both stages passed and the shipped change still serves its requested outcome with no unresolved corrective work. Unshipped tasks earn zero at the agreed delivery deadline. Charge repair effort to its original arm and report unknown exposure. Apply the pilot thresholds to these four new pairs. If they pass, adopt only for enrolled task types whose candidate succeeded and used fewer owner minutes than its baseline task. Treat this as a scoped rollout and keep recording later outcomes.
