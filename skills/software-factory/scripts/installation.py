@@ -211,6 +211,9 @@ def install_release(
         not current.is_symlink() or current.resolve().parent != root / "releases"
     ):
         raise ValueError(f"Foreign current release: {current}")
+    detached = remove and saved and not os.path.lexists(current) and not os.path.lexists(
+        prefix / "bin/factory"
+    )
     has_entry = False
     for link, target in destinations.items():
         if link == prefix / "bin/factory":
@@ -221,6 +224,8 @@ def install_release(
         if link_target(previous) != str(target) and not is_managed_skill_directory(
             previous, current, registration.get("sha256")
         ):
+            if detached:
+                continue
             raise ValueError(f"Another installation owns the pending skill change: {link}")
         if not dry_run:
             if not os.path.lexists(link):
@@ -236,7 +241,7 @@ def install_release(
             link, current, registration.get("sha256")
         ):
             has_entry = True
-        else:
+        elif not detached:
             raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
     if rollback:
@@ -270,14 +275,18 @@ def install_release(
     if remove:
         if not saved:
             raise ValueError("Missing installation manifest")
-        if has_entry:
-            previous = skill_transition(default_skill)
-            default_skill.rename(previous)
-        for link, target in destinations.items():
-            if link_target(link) == str(target):
-                link.unlink()
+        retired = []
+        for skill_root in skills:
+            path = skill_root / "software-factory"
+            if link_target(path) == str(current) or (path == default_skill and has_entry):
+                previous = skill_transition(path)
+                path.rename(previous)
+                retired.append(previous)
+        cli = prefix / "bin/factory"
+        if link_target(cli) == str(current / "scripts/factory"):
+            cli.unlink()
         current.unlink(missing_ok=True)
-        if has_entry:
+        for previous in retired:
             discard_skill_transition(previous)
         manifest.unlink()
         return report
@@ -310,6 +319,8 @@ def install_release(
     )
     if registration:
         configuration["skill_entry"] = registration
+    entry = None
+    had_link = False
     if default_skill in destinations:
         template = release / SKILL_ENTRY
         wants_entry = template.is_file()
@@ -321,8 +332,6 @@ def install_release(
                 "path": str(default_skill),
                 "sha256": hashlib.sha256(entry).hexdigest(),
             }
-            write_json(manifest, configuration)
-            publish_default_skill(default_skill, current, entry, replace=had_link)
         elif not wants_entry and (has_entry or not had_link):
             publish_default_skill(default_skill, current, None, replace=has_entry)
     for link, target in destinations.items():
@@ -340,6 +349,8 @@ def install_release(
         configuration["commit"] = commit
     write_json(manifest, configuration)
     replace_link(current, release)
+    if entry is not None:
+        publish_default_skill(default_skill, current, entry, replace=had_link)
     if switching:
         configuration.pop("pending_release")
         configuration.update(previous=old, commit=commit)
