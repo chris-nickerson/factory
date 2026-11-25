@@ -10,7 +10,7 @@ Read the request, the final diff against the intended base, the check results an
 
 **Show how you know.** Give the most relevant observation and link to the evidence when available. Describe the result in product terms (“the exporter wrote five rows”). A test can pass, fail or check that result. Attribute supplied results to the test run. Say “I ran” only for checks you personally performed. Group checks that support the same claim. Say which material cases remain untested.
 
-**Illustrate only when prose is not enough.** If one sentence explains the cause, stop there. Otherwise, show the same case before and after. Hold the input and conditions fixed, use the same labels and units, and end with what a user or caller observes. A table suits a decision, aligned timelines suit a deadline, and sample input and output suit an API contract.
+**Show the same case before and after.** If one sentence explains the cause, use it. When the reader would have to sketch what happened, choose the smallest illustration that explains the result. Hold the input and conditions fixed, use the same labels and units, and end with what a user or caller observes. Use aligned timelines for a deadline, a table for a decision, a short trace for a handoff, or sample input and output for an API contract.
 
 For example:
 
