@@ -1,26 +1,13 @@
-"""Non-mutating local capability checks. A live provider turn is a separate check."""
+"""Local capability checks. A live turn is the only proof of model access."""
 
-import json
 import os
+from pathlib import Path
 import shutil
-import subprocess
 import sys
 
-
-PROVIDERS = {
-    "codex": ("Codex CLI", "codex login"),
-    "claude": ("Claude Code CLI", "claude auth login"),
-}
-
-
-def probe(argv):
-    try:
-        proc = subprocess.run(
-            argv, capture_output=True, text=True, timeout=12, stdin=subprocess.DEVNULL
-        )
-        return proc.returncode, proc.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired):
-        return 2, ""
+from harness import ADAPTERS
+import roles
+from workspace import repo_root
 
 
 def diagnose(args):
@@ -31,39 +18,30 @@ def diagnose(args):
         },
         "posix": {"available": os.name == "posix"},
     }
-    required = ["git"] if args.profile == "local" else ["git", *PROVIDERS]
-    for tool in required:
-        exe = shutil.which(tool)
-        rc, version = probe([exe, "--version"]) if exe else (2, "")
-        details = {"available": rc == 0, "path": exe, "version": version}
-        if exe and tool == "claude":
-            _, raw = probe([exe, "auth", "status"])
-            try:
-                logged_in = json.loads(raw)["loggedIn"] is True
-            except (ValueError, KeyError, TypeError):
-                logged_in = False
-            details.update(
-                authenticated=logged_in, available=details["available"] and logged_in
-            )
-        if exe and tool == "codex":
-            auth, _ = probe([exe, "login", "status"])
-            details.update(
-                authenticated=auth == 0, available=details["available"] and auth == 0
-            )
-        checks[tool] = details
+    exe = shutil.which("git")
+    rc, version = roles.probe([exe, "--version"]) if exe else (2, "")
+    checks["git"] = {"available": rc == 0, "path": exe, "version": version}
+    resolved = roles.report(repo_root(Path(args.repo)))
+    if args.profile == "paired":
+        for name, details in resolved["harnesses"].items():
+            checks[name] = {
+                key: details[key]
+                for key in ("available", "path", "version", "authenticated")
+            }
     ready = all(row["available"] for row in checks.values())
     report = {
         "profile": args.profile,
         "status": "AVAILABLE" if ready else "BLOCKED",
         "checks": checks,
+        **resolved,
         "scope": "Local executables and reported login state. Model access requires a live turn.",
     }
     steps = [
-        f"Install {name} on PATH, then run `{login}`."
-        if checks[tool]["path"] is None
-        else f"Check `{tool} --version` and authenticate with `{login}`."
-        for tool, (name, login) in PROVIDERS.items()
-        if tool in checks and not checks[tool]["available"]
+        f"Install {adapter.title} on PATH, then run `{adapter.login}`."
+        if checks[name]["path"] is None
+        else f"Check `{name} --version` and authenticate with `{adapter.login}`."
+        for name, adapter in ADAPTERS.items()
+        if name in checks and not checks[name]["available"]
     ]
     if steps:
         report["next_steps"] = [
@@ -74,9 +52,30 @@ def diagnose(args):
     return report, 0 if ready else 2
 
 
+def show_roles(args):
+    repo = repo_root(Path(args.repo))
+    if args.approve:
+        roles.approve_project(repo)
+    return roles.report(repo), 0
+
+
 def register(sub):
     parser = sub.add_parser(
-        "doctor", help="Inspect local prerequisites and optional model logins"
+        "doctor",
+        help="Inspect local prerequisites, model logins and what fills each role",
     )
     parser.add_argument("--profile", choices=("local", "paired"), default="local")
+    parser.add_argument(
+        "--repo", default=".", help="project whose role settings apply"
+    )
     parser.set_defaults(action=diagnose)
+    parser = sub.add_parser(
+        "roles", help="Show which harness and model fill each role, and why"
+    )
+    parser.add_argument("--repo", default=".")
+    parser.add_argument(
+        "--approve",
+        action="store_true",
+        help="approve this project's current role settings in software-factory.toml",
+    )
+    parser.set_defaults(action=show_roles)

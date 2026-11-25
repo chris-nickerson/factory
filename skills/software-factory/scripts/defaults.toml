@@ -1,0 +1,26 @@
+# Factory's built-in role policy. A user or approved project configuration
+# file uses the same [roles] and [models] tables and overrides these values.
+
+# A role is HARNESS[:MODEL] or :MODEL. These defaults name only a tier, so the
+# harness comes from the environment.
+[roles]
+reviewer = ":frontier"
+simplifier = ":standard"
+consensus-a = ":standard"
+consensus-b = ":standard"
+
+[default-harness-order]
+reviewer = ["codex", "claude"]
+simplifier = ["claude", "codex"]
+consensus-a = ["codex", "claude"]
+consensus-b = ["claude", "codex"]
+
+# The model family each harness uses for a tier. `frontier` is the most
+# capable family and `standard` is the cheaper one for repeated turns.
+[models.claude]
+standard = "opus"
+frontier = "fable"
+
+[models.codex]
+standard = "sol"
+frontier = "astra"

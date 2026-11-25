@@ -194,6 +194,8 @@ print(json.dumps(dict(subtype="success", session_id=session, modelUsage={"claude
                 args = [
                     FACTORY,
                     "simplify",
+                    "--simplifier",
+                    "claude",
                     "--repo",
                     repo,
                     "--base",

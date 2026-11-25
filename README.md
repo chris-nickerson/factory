@@ -9,10 +9,10 @@ Today, Factory is an installable agent skill and a local CLI. The skill reads yo
 | If you need to | Ask Factory to |
 | --- | --- |
 | Fix a bug or build a change | Confirm the behavior through a real entry point, make the change, and show what happens afterward. |
-| Decide between designs or diagnose a hard problem | Have Codex and Claude Opus investigate independently, then compare the evidence behind their conclusions. |
-| Simplify a branch | Give fresh Opus sessions the branch, its constraints, and the checks it must pass. |
+| Decide between designs or diagnose a hard problem | Have two models investigate independently, then compare the evidence behind their conclusions. |
+| Simplify a branch | Give fresh model sessions the branch, its constraints, and the checks it must pass. |
 | Upgrade a dependency or clear a scanner alert | Find which version the project actually installs and check the code that uses it. |
-| Review a change | Have a fresh Codex session review the scoped diff and back each finding with the case that triggers it. |
+| Review a change | Have a fresh session from a model that didn’t write the change review the scoped diff and back each finding with the case that triggers it. |
 | Prepare a pull request | Explain the change, follow CI and review feedback, and fix confirmed issues. |
 | Improve documentation | Check what the project does and write instructions someone can follow without reading the ticket. |
 
@@ -36,9 +36,17 @@ Open one of your repositories in a new coding-agent session, then ask for the ou
 
 > Use Software Factory to reproduce this bug, fix it, and verify it through the public entry point. Keep the change local.
 
-> Use Software Factory to get a second diagnosis from Opus. Stay read-only and tell me what observation would settle the disagreement.
+> Use Software Factory to get a second diagnosis from another model. Stay read-only and tell me what observation would settle the disagreement.
 
-Independent review requires Codex. Simplification requires Claude Code. A two-model design or diagnosis requires both. Run `factory doctor --profile paired` to check their availability, or use the [local workflow](skills/software-factory/references/local.md) to run checks without them.
+### Which model does which job
+
+Review, simplification and two-model decisions each run in a separate model session through an agent CLI you have installed. Factory supports Codex and Claude Code, and you can start it from either one. A review is worth more when the reviewer isn’t the model that wrote the change, so with both installed Factory has Claude simplify and Codex review, and pairs the two for a design or diagnosis. With one installed, everything still runs and Factory tells you which assurance is reduced, such as a review from the same vendor as the author.
+
+```sh
+factory roles
+```
+
+The command shows which CLI and model fill each role on your machine and why. Each role also has a model tier. The reviewer uses the most capable family, and repeated simplification and discussion turns use a cheaper one. Override either per run or in a config file. [Roles, harnesses and models](skills/software-factory/references/roles.md) explains the choices. Without either CLI, use the [local workflow](skills/software-factory/references/local.md) to run checks.
 
 ## Update
 

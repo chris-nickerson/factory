@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import time
 import uuid
 
@@ -24,6 +25,7 @@ from checkpoints import (
     rev,
 )
 from harness import run_turn
+import roles
 from supervision import captured_check, turn_stopped
 from workspace import (
     snapshot,
@@ -37,8 +39,18 @@ PROMPT = (
     Path(__file__).resolve().parents[1]
     / "references/reconsider-from-first-principles.v1.txt"
 )
+# In this profile the simplifier has file tools and no shell.
 LEGACY_PROFILE = "codex-opus-simplify/1"
-PROFILE = "codex-opus-simplify/2"
+PROFILES = (LEGACY_PROFILE, "codex-opus-simplify/2", "simplify/3")
+PROFILE = PROFILES[-1]
+SIMPLIFIER_BEFORE_ROLES = {
+    "role": "simplifier",
+    "harness": "claude",
+    "selector": "opus",
+    "model": "opus",
+    "source": "saved run",
+    "reductions": [],
+}
 
 
 def work_root():
@@ -47,6 +59,33 @@ def work_root():
 
 def owner_path(repo):
     return work_root() / "owners" / digest(os.fsencode(repo))
+
+
+def last_writer(repo):
+    """Name the simplifier whose completed run produced the checked-out commit."""
+    try:
+        run = json.loads(
+            (
+                work_root()
+                / owner_path(str(Path(repo).resolve())).read_text().strip()
+                / "state.json"
+            ).read_text()
+        )
+        rounds = run["rounds"]
+        if (
+            run["status"] != "complete"
+            or rounds[-1]["output"] != rev(repo, "HEAD")
+            or all(r["output"] == r["input"] for r in rounds)
+            or git(repo, "status", "--porcelain").strip()
+        ):
+            return None
+    except (OSError, ValueError, KeyError, IndexError, RuntimeError, subprocess.SubprocessError):
+        return None
+    return saved_simplifier(run)["harness"], run["id"]
+
+
+def saved_simplifier(run):
+    return run.get("simplifier") or SIMPLIFIER_BEFORE_ROLES
 
 
 def create_run(args, repo):
@@ -60,8 +99,11 @@ def create_run(args, repo):
     if any(not c for c in check_commands):
         raise Pending("A check command must contain an executable.")
     ref = branch_ref(repo)
+    binding = roles.simplifier(roles.Policy(repo), explicit=args.simplifier)
+    print(roles.describe(binding), file=sys.stderr, flush=True)
     run = {
         "profile": PROFILE,
+        "simplifier": binding,
         "id": str(uuid.uuid4()),
         "repo": str(repo),
         "branch_ref": ref,
@@ -151,7 +193,7 @@ def call_context(run, record, folder):
         "Use local Bash for inspection and repository tests as needed. Keep temporary test output "
         "outside the source tree or in its existing ignored build paths. Leave Git mutations, "
         "publication, external graders and the independent checks to the coordinator."
-        if run["profile"] == PROFILE
+        if run["profile"] != LEGACY_PROFILE
         else "The coordinator owns shell, Git and validation."
     )
     return (
@@ -211,15 +253,17 @@ def contact(run, record, folder, kind, prompt, context):
     )
     record["phase"] = "calling"
     save(folder / "state.json", run)
+    binding = saved_simplifier(run)
     run_turn(
-        "claude",
+        binding["harness"],
         repo=Path(run["repo"]),
         prompt=prompt,
         context=context,
-        model="opus",
+        model=binding["model"],
+        selector=binding["selector"],
         session_id=session,
         edit=kind != "assess",
-        local_shell=run["profile"] == PROFILE and kind != "assess",
+        local_shell=run["profile"] != LEGACY_PROFILE and kind != "assess",
         output_dir=folder / call_name,
     )
 
@@ -237,6 +281,7 @@ def consume_call(run, record, folder, recover):
         save(folder / "state.json", run)
         return
     receipt = json.loads(receipt_path.read_text())
+    binding = saved_simplifier(run)
     if receipt.get("status") != "success":
         if not recover or not stopped(receipt_path):
             raise Pending(
@@ -255,16 +300,23 @@ def consume_call(run, record, folder, recover):
         return
     if (
         receipt["prompt_sha256"] != call["prompt_sha256"]
-        or receipt.get("model_requested") != "opus"
+        or receipt.get("provider") != binding["harness"]
+        or receipt.get("model_requested") != binding["model"]
     ):
         raise Pending("The saved harness response does not match this request.")
     session = receipt["session_id"]
     if not session or (record.get("session_id") and session != record["session_id"]):
-        raise Pending("The Opus session changed within a round.")
+        raise Pending("The simplifier session changed within a round.")
     if any(old.get("session_id") == session for old in run["rounds"][:-1]):
-        raise Pending("Opus reused a previous round's context.")
+        raise Pending("The simplifier reused a previous round's context.")
     reported = receipt.get("model_reported")
-    if reported and "opus" not in reported.lower():
+    harness_compared = "model_identity" in receipt
+    if (
+        not harness_compared
+        and reported
+        and binding["model"]
+        and binding["model"].lower() not in reported.lower()
+    ):
         raise Pending(f"The harness reported a different model: {reported}.")
     record.update(session_id=session, model_reported=reported)
     text = receipt["text"].strip()
@@ -277,7 +329,7 @@ def consume_call(run, record, folder, recover):
         else:
             if not recover:
                 raise Pending(
-                    "Opus returned no valid final assessment. Inspect the receipt and use "
+                    "The simplifier returned no valid final assessment. Inspect the receipt and use "
                     "--recover to request a corrected assessment."
                 )
             record["phase"] = "assess"
@@ -445,6 +497,7 @@ def report(run, folder):
         "status": run["status"],
         "branch": run["branch"],
         "profile": run["profile"],
+        "simplifier": saved_simplifier(run),
         "state": str(folder / "state.json"),
         "target_rounds": run.get("target_rounds", 3),
         "rounds": [
@@ -518,9 +571,10 @@ def validate_arguments(args):
     if subject is not None and not args.recover:
         raise Pending("Changing a rejected checkpoint subject requires --recover.")
     saved = (args.repo, args.base, args.task, args.check, args.allow, args.push)
-    if any(saved) or args.rounds:
+    if any(saved) or args.rounds or args.simplifier:
         raise Pending(
-            "A resumed run uses its saved contract, commands and publication target."
+            "A resumed run uses its saved contract, commands, simplifier and "
+            "publication target."
         )
 
 
@@ -579,7 +633,7 @@ def handle(args):
             if folder:
                 # Reread under the lock; another coordinator may have advanced it.
                 run = json.loads((folder / "state.json").read_text())
-                if run["profile"] not in (LEGACY_PROFILE, PROFILE):
+                if run["profile"] not in PROFILES:
                     raise Pending("Unsupported run profile.")
                 if run["status"] != "active":
                     return emit_status(run, folder)
@@ -612,7 +666,12 @@ def handle(args):
 def register(subparsers):
     p = subparsers.add_parser("simplify", description=__doc__)
     p.add_argument(
-        "--rounds", type=int, choices=(1, 2, 3), help="fresh Opus rounds (default 3)"
+        "--rounds", type=int, choices=(1, 2, 3), help="fresh simplifier rounds (default 3)"
+    )
+    p.add_argument(
+        "--simplifier",
+        metavar="SPEC",
+        help="HARNESS[:MODEL] or :MODEL for this run, such as claude:frontier",
     )
     p.add_argument(
         "--commit-subject", help="checkpoint subject required by the target repository"

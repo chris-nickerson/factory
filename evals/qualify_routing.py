@@ -1,4 +1,4 @@
-"""Sample how Codex selects Factory procedures from a fresh project session."""
+"""Sample how a host agent selects Factory procedures from a fresh project session."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -21,13 +21,18 @@ CASES = {
         False,
     ),
     "simplify": (
-        "Have fresh Opus sessions simplify this branch. Keep the result local.",
+        "Have fresh model sessions simplify this branch. Keep the result local.",
         "simplify",
         False,
     ),
     "narrowed": (
         "Simplify this branch with Opus and push each round. One correction before you start: keep every round local.",
         "simplify",
+        False,
+    ),
+    "review": (
+        "Use Software Factory to get an independent review of this change from a model that didn't write it. Don't change any files.",
+        "local",
         False,
     ),
     "publish": (
@@ -55,6 +60,10 @@ def main():
     parser.add_argument("output", type=Path, help="New directory for traces and the report")
     parser.add_argument("--case", choices=CASES, action="append")
     parser.add_argument("--model")
+    parser.add_argument(
+        "--host", choices=("codex", "claude"), default="codex",
+        help="agent CLI that reads the skill and selects the procedure",
+    )
     parser.add_argument("--trials", type=int, default=1)
     args = parser.parse_args()
     if args.trials < 1:
@@ -70,7 +79,11 @@ def main():
     )
     schema = out / "result-schema.json"
     schema.write_text(json.dumps(SCHEMA))
-    version = subprocess.check_output(["codex", "--version"], text=True).strip()
+    version = subprocess.check_output([args.host, "--version"], text=True).strip()
+    if args.host == "claude":
+        # Claude Code discovers project skills in .claude/skills.
+        (repo / ".claude").mkdir()
+        (repo / ".claude/skills").symlink_to(repo / ".agents/skills")
     revision = subprocess.check_output(
         ["git", "-C", ROOT, "rev-parse", "HEAD"], text=True
     ).strip()
@@ -87,11 +100,18 @@ def main():
             "multi_agent_v2", "-c", "mcp_servers={}", "--json", "--output-schema",
             schema, "-o", prefix.with_suffix(".json"),
         ]
+        if args.host == "claude":
+            argv = [
+                "claude", "--print", "--strict-mcp-config", "--mcp-config",
+                '{"mcpServers":{}}', "--tools", "Read,Glob,Grep,Skill",
+                "--permission-mode", "dontAsk", "--output-format", "json",
+                "--json-schema", json.dumps(SCHEMA),
+            ]
         if args.model:
             argv.extend(["--model", args.model])
         with prefix.with_suffix(".jsonl").open("w") as events, prefix.with_suffix(".stderr").open("w") as errors:
             result = subprocess.run(
-                [*argv, "-"],
+                argv if args.host == "claude" else [*argv, "-"],
                 cwd=repo,
                 text=True,
                 stdout=events,
@@ -103,7 +123,11 @@ def main():
                     + prompt
                 ),
             )
-        observed = json.loads(prefix.with_suffix(".json").read_text()) if result.returncode == 0 else None
+        observed = None
+        if result.returncode == 0 and args.host == "claude":
+            observed = json.loads(prefix.with_suffix(".jsonl").read_text()).get("structured_output")
+        elif result.returncode == 0:
+            observed = json.loads(prefix.with_suffix(".json").read_text())
         expected = dict(skill="software-factory", procedure=route, publish=publish)
         return dict(case=name, trial=trial, observed=observed, expected=expected,
                     cli_exit=result.returncode, passed=observed == expected)
@@ -112,7 +136,7 @@ def main():
     jobs = [(name, trial) for name in cases for trial in range(1, args.trials + 1)]
     with ThreadPoolExecutor(max_workers=3) as pool:
         samples = list(pool.map(sample, jobs))
-    report = dict(codex=version, model_requested=args.model, checkout_head=revision, samples=samples)
+    report = dict(host=args.host, host_version=version, model_requested=args.model, checkout_head=revision, samples=samples)
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
     return int(not all(sample["passed"] for sample in samples))

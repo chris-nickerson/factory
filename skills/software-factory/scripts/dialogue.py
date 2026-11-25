@@ -1,4 +1,4 @@
-"""Alternating Codex/Opus dialogue with independent openings and durable turn receipts."""
+"""Alternating two-participant dialogue with independent openings and durable turn receipts."""
 
 import argparse
 import fcntl
@@ -13,11 +13,13 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from harness import run_turn
+import roles
 from supervision import turn_stopped
 from workspace import repo_root, snapshot, state_root, workspace_lock, write_json
 
 
-PROVIDERS = {"a": "codex", "b": "claude"}
+SLOTS = ("a", "b")
+HARNESSES_BEFORE_PARTICIPANTS = {"a": "codex", "b": "claude"}
 GOALS = {
     "design": "Compare viable designs against the actual requirements. State the tradeoff, "
     "your strongest alternative, acceptance cases and what would change your choice.",
@@ -40,7 +42,7 @@ PROPOSE = (
     "before a final line of STATUS: RESOLUTION_PROPOSED, or explain the open question "
     "and end with STATUS: OPEN. Do not quote or wrap the status line."
 )
-SCHEMA = 2
+SCHEMA = 3
 
 
 class DialogueError(RuntimeError):
@@ -171,6 +173,13 @@ def _view(directory, message=None):
         "turns": len(turns),
         "status": "pending",
     }
+    if "participants" in meta:
+        result["participants"] = meta["participants"]
+        result["reductions"] = [
+            reduction
+            for binding in meta["participants"].values()
+            for reduction in binding["reductions"]
+        ]
     if turns and turns[-1]["actor"] == "a" and turns[-1]["status"] == "CONFIRMED":
         target = turns[-1]["accept"]
         proposal = next(turn for turn in turns if turn["id"] == target)
@@ -194,8 +203,10 @@ def _view(directory, message=None):
 
 def _response(directory, meta, step, actor, prompt, context, session=None):
     """Recover a completed provider call before issuing any replacement."""
+    participant = meta.get("participants", {}).get(actor, {})
     request = {
-        "provider": PROVIDERS[actor],
+        "provider": participant.get("harness")
+        or HARNESSES_BEFORE_PARTICIPANTS[actor],
         "repo": meta["repo"],
         "model": meta["models"][actor],
         "session_id": session,
@@ -221,6 +232,8 @@ def _response(directory, meta, step, actor, prompt, context, session=None):
                 for field in ("provider", "repo", "prompt_sha256", "context_sha256")
             ):
                 raise DialogueError(f"Mismatched provider receipt at {attempt}.")
+            if result.get("model_requested", request["model"]) != request["model"]:
+                raise DialogueError(f"Mismatched model in the receipt at {attempt}.")
             if session and result.get("session_id") != session:
                 raise DialogueError(f"Unexpected replacement session at {attempt}.")
             return result
@@ -237,6 +250,7 @@ def _response(directory, meta, step, actor, prompt, context, session=None):
         prompt=prompt,
         context=context,
         model=request["model"],
+        selector=participant.get("selector"),
         session_id=session,
         edit=False,
         output_dir=attempt / "call",
@@ -279,7 +293,7 @@ def _dialogue_prompt(meta, actor, turns, opening_b):
 
 def _drive(directory):
     meta = _load(directory / "run.json")
-    if meta.get("version") not in (1, SCHEMA):
+    if meta.get("version") not in (1, 2, SCHEMA):
         raise DialogueError("Unsupported consensus record version.")
     repo = Path(meta["repo"])
     if snapshot(repo) != meta["subject"]:
@@ -364,7 +378,7 @@ def _positive(value):
 
 def register(subparsers):
     parser = subparsers.add_parser(
-        "consensus", help="Reach a design or diagnosis decision using Codex and Opus"
+        "consensus", help="Reach a design or diagnosis decision between two models"
     )
     modes = parser.add_subparsers(dest="consensus_action", required=True)
     for mode in GOALS:
@@ -375,9 +389,17 @@ def register(subparsers):
         # Accept invocations generated for the old CLI without limiting agents.
         config.add_argument("--timeout", type=_positive, help=argparse.SUPPRESS)
         config.add_argument("--deadline", type=_positive, help=argparse.SUPPRESS)
-        config.add_argument("--gpt-model", help="Codex model override")
+        for slot in SLOTS:
+            config.add_argument(
+                f"--{slot}",
+                metavar="SPEC",
+                help=f"HARNESS[:MODEL] or :MODEL for participant {slot.upper()}",
+            )
         config.add_argument(
-            "--opus-model", default="opus", help="Claude model selection"
+            "--gpt-model", help="model for whichever participant uses Codex"
+        )
+        config.add_argument(
+            "--opus-model", help="model for whichever participant uses Claude Code"
         )
     for mode in ("resume", "status"):
         modes.add_parser(mode).add_argument("run")
@@ -401,6 +423,16 @@ def handle(args):
                 "FACTORY_STATE_DIR must be outside the target repository."
             )
         subject = snapshot(repo)
+        participants = roles.consensus_pair(
+            roles.Policy(repo),
+            a=args.a,
+            b=args.b,
+            harness_models={"codex": args.gpt_model, "claude": args.opus_model},
+        )
+        for binding in participants.values():
+            print(roles.describe(binding), file=sys.stderr)
+            for reduction in binding["reductions"]:
+                print(f"Reduced assurance: {reduction}", file=sys.stderr)
         directory.mkdir(mode=0o700, parents=True)
         _publish(
             directory / "run.json",
@@ -410,7 +442,8 @@ def handle(args):
                 "task": args.task,
                 "subject": subject,
                 "mode": action,
-                "models": {"a": args.gpt_model, "b": args.opus_model},
+                "participants": participants,
+                "models": {slot: b["model"] for slot, b in participants.items()},
                 "exchanges": args.exchanges,
             },
         )

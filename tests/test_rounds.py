@@ -50,6 +50,25 @@ print(json.dumps({"subtype":"success","session_id":session,"modelUsage":{"claude
 """
 
 
+FAKE_CODEX_NAMING_ITS_SESSION = r"""#!/usr/bin/env python3
+from pathlib import Path
+import json, os, sys, uuid
+args = sys.argv[1:]
+fresh = "resume" not in args
+session = str(uuid.uuid4()) if fresh else args[args.index("resume") + 1]
+if fresh:
+    Path("calc.py").write_text("def add(a, b):\n    return a + b\n")
+with open(os.environ["FIXTURE_TURNS"], "a") as stream:
+    print(json.dumps({"sandbox": args[args.index("--sandbox") + 1],
+                      "model": args[args.index("--model") + 1]}), file=stream)
+text = "Candidate inspected." if fresh else "Observed results.\nSTATUS: VERIFIED"
+for event in ({"type": "thread.started", "thread_id": session},
+              {"type": "item.completed", "item": {"type": "agent_message", "text": text}},
+              {"type": "turn.completed"}):
+    print(json.dumps(event))
+"""
+
+
 class RoundsTests(unittest.TestCase):
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory()
@@ -88,6 +107,8 @@ class RoundsTests(unittest.TestCase):
         self.start = [
             "--repo",
             str(self.repo),
+            "--simplifier",
+            "claude",
             "--base",
             "trunk",
             "--task",
@@ -121,6 +142,49 @@ class RoundsTests(unittest.TestCase):
                 self.assertEqual(
                     self.invoke("--resume", result["id"], "--rounds", "3")[0], 2
                 )
+
+    def test_codex_simplifier_edits_then_assesses_read_only(self):
+        fake = self.folder / "codex"
+        fake.write_text(FAKE_CODEX_NAMING_ITS_SESSION)
+        fake.chmod(0o755)
+        start = [
+            "codex:gpt-fixture" if arg == "claude" else arg for arg in self.start
+        ]
+        code, result = self.invoke(*start, "--rounds", "1")
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["profile"], "simplify/3")
+        self.assertEqual(result["simplifier"]["harness"], "codex")
+        self.assertIsNone(result["rounds"][0]["model_reported"])
+        turns = [json.loads(row) for row in self.turns.read_text().splitlines()]
+        self.assertEqual(
+            turns,
+            [
+                {"sandbox": "workspace-write", "model": "gpt-fixture"},
+                {"sandbox": "read-only", "model": "gpt-fixture"},
+            ],
+        )
+        self.assertIn("return a + b", self.git("show", "HEAD:calc.py"))
+        self.assertEqual(rounds.last_writer(self.repo), ("codex", result["id"]))
+
+    def test_run_saved_by_the_previous_release_reports_and_resumes(self):
+        with patch.object(
+            rounds, "run_turn", side_effect=rounds.Pending("interrupted before launch")
+        ):
+            code, result = self.invoke(*self.start, "--rounds", "1")
+        self.assertEqual(code, 2)
+        saved = rounds.work_root() / result["run"] / "state.json"
+        data = json.loads(saved.read_text())
+        data["profile"] = "codex-opus-simplify/2"
+        del data["simplifier"]
+        rounds.save(saved, data)
+        code, status = self.invoke("--resume", result["run"], "--status")
+        self.assertEqual(status["simplifier"]["model"], "opus")
+        code, complete = self.invoke("--resume", result["run"], "--recover")
+        self.assertEqual(code, 0, complete)
+        self.assertEqual(complete["profile"], "codex-opus-simplify/2")
+        records = [json.loads(row) for row in self.turns.read_text().splitlines()]
+        self.assertEqual([r["mode"] for r in records], ["auto", "dontAsk"])
+        self.assertEqual(rounds.last_writer(self.repo), ("claude", result["run"]))
 
     def test_recover_rejected_subject_with_rewriting_hook_and_trailer(self):
         hook = self.repo / ".git/hooks/commit-msg"

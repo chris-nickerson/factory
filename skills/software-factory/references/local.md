@@ -6,7 +6,7 @@ Inspect from the target checkout. For a diagnosis-only task, stop when you can i
 2. Write the contract before editing. Save the JSON and any independent oracle outside the checkout. Give each claim a unique ID, an expected result, and either an argument list or a Python oracle. Choose commands that exit nonzero when the claim fails. A check can set a working directory relative to the repository. To use shell expansion, call a shell explicitly.
 3. Start the run with `factory start` and save the returned run ID. If the branch contains unrelated changes, repeat `--path` for each path under review. Factory still checks freshness against the whole source set. For full delivery, pass the intended base and require review.
 4. Capture the baseline that fits the task. Implement the scoped change and rerun the saved checks. Read the raw logs and confirm they show the behavior you meant to check.
-5. If the task requires review, run a fresh GPT review on the final candidate. Rerun any affected verification after repairs.
+5. If the task requires review, run `factory review` on the final candidate. Factory [chooses the reviewer](roles.md#how-factory-chooses-a-default) and reports any reduced assurance. Rerun any affected verification after repairs.
 
 The evidence commands return JSON. Exit 0 means the command succeeded or the evidence gate passed. Exit 1 means a checked failure. Exit 2 means the result is incomplete, stale or blocked. If setup prevents a real observation, name the check and keep the claim open. A GUI check needs a real driver or an identified human observation. A mock verifies behavior up to the boundary it replaces.
 
