@@ -1,6 +1,6 @@
 """Install and update the CLI and skill as one content-addressed release."""
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import fcntl
 import hashlib
 import json
@@ -53,6 +53,16 @@ def installation_lock(prefix):
     with (root / "install.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         yield
+
+
+@contextmanager
+def skill_root_lock(path):
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
 
 
 def link_target(path):
@@ -120,6 +130,9 @@ def install(
     current = root / "current"
     manifest = root / "installation.json"
     saved = json.loads(manifest.read_text()) if manifest.exists() else {}
+    pending = saved.pop("pending_release", None)
+    if pending and link_target(current) == pending["release"]:
+        saved["previous"] = pending["previous"]
     default_skill_root = (Path.home() / ".agents/skills").resolve()
     skills = (
         skill_dirs
@@ -131,10 +144,48 @@ def install(
         raise ValueError(
             "Use the original skill directories for this installation or a different --prefix"
         )
+    if prefix.name == ".local" and default_skill_root not in skills:
+        default_skill_root = (prefix.parent / ".agents/skills").resolve()
     registration = saved.get("skill_entry", {})
     default_skill = Path(
         registration.get("path", default_skill_root / "software-factory")
     )
+    with ExitStack() as locks:
+        if not dry_run:
+            for skill_root in sorted(set(skills)):
+                if not remove:
+                    skill_root.mkdir(parents=True, exist_ok=True)
+                if skill_root.is_dir():
+                    locks.enter_context(skill_root_lock(skill_root))
+        return install_release(
+            prefix,
+            source,
+            saved,
+            skills,
+            default_skill,
+            origin=origin,
+            rollback=rollback,
+            remove=remove,
+            dry_run=dry_run,
+        )
+
+
+def install_release(
+    prefix,
+    source,
+    saved,
+    skills,
+    default_skill,
+    *,
+    origin,
+    rollback,
+    remove,
+    dry_run,
+):
+    root = prefix / "lib/software-factory"
+    current = root / "current"
+    manifest = root / "installation.json"
+    registration = saved.get("skill_entry", {})
     destinations = {prefix / "bin/factory": current / "scripts/factory"}
     destinations.update({d / "software-factory": current for d in skills})
     if os.path.lexists(current) and (
@@ -188,8 +239,8 @@ def install(
                 prefix=".factory-", dir=default_skill.parent
             ) as temp:
                 default_skill.rename(Path(temp) / "retired")
-        for link in destinations:
-            if link.is_symlink():
+        for link, target in destinations.items():
+            if link_target(link) == str(target):
                 link.unlink()
         current.unlink(missing_ok=True)
         manifest.unlink()
@@ -241,10 +292,14 @@ def install(
         if link != default_skill and not link.is_symlink():
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to(target)
-    if old and old != str(release):
-        configuration["previous"] = old
+    switching = old and old != str(release)
+    if switching:
+        configuration["pending_release"] = {"release": str(release), "previous": old}
     write_json(manifest, configuration)
     replace_link(current, release)
+    if switching:
+        configuration["previous"] = configuration.pop("pending_release")["previous"]
+        write_json(manifest, configuration)
     return report
 
 

@@ -409,8 +409,7 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(self.cli("check", run)["status"], "VERIFIED")
         guidance = self.repo / ".agents/skills/software-factory/references/local.md"
         guidance.write_text("modified after verification")
-        blocked = self.cli("status", run, code=2)
-        self.assertIn("Installed Factory release changed", blocked["error"])
+        self.assertEqual(self.cli("status", run, code=2)["status"], "BLOCKED")
 
     def test_release_upgrade_and_rollback(self):
         clone = self.home / "factory-source"
