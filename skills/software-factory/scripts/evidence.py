@@ -165,6 +165,11 @@ def check(args):
         ids = args.claim or list(data["claims"])
         if set(ids) - data["claims"].keys() or args.timeout <= 0:
             raise ValueError("Unknown claim or nonpositive timeout")
+        if args.remaining:
+            report, code = summary(folder, data, snapshot(repo))
+            ids = [key for key, row in report["claims"].items() if row["status"] != "PASS"]
+            if not ids:
+                return report, code
         for key in ids:
             claim = data["claims"][key]
             index = len(data["attempts"]) + 1
@@ -517,7 +522,13 @@ def register(sub):
         parser = sub.add_parser(name, help=help_text)
         parser.add_argument("run")
         if name == "check":
-            parser.add_argument("--claim", action="append")
+            selection = parser.add_mutually_exclusive_group()
+            selection.add_argument("--claim", action="append")
+            selection.add_argument(
+                "--remaining",
+                action="store_true",
+                help="Run only claims without a valid pass for the current workspace",
+            )
             parser.add_argument(
                 "--timeout",
                 type=int,

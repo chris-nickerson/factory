@@ -94,6 +94,31 @@ class FactoryTests(unittest.TestCase):
             self.cli("status", run, code=2)["claims"]["sum"]["status"], "STALE"
         )
 
+    def test_remaining_reuses_only_current_intact_passes(self):
+        claims = [
+            dict(id=key, expect="command succeeds", argv=[sys.executable, "-c", "pass"])
+            for key in ("first", "second")
+        ]
+        run = self.start(claims, extra=("--require-review",))
+        partial = self.cli("check", run, "--claim", "first", code=2)
+        resumed = self.cli("check", run, "--remaining", code=2)
+        self.assertEqual(resumed["claims"]["first"], partial["claims"]["first"])
+        self.assertEqual(resumed["claims"]["second"]["status"], "PASS")
+        self.assertEqual(self.cli("check", run, "--remaining", code=2), resumed)
+
+        first_log = resumed["claims"]["first"]["latest"]["log"]
+        (Path(resumed["artifacts"]) / first_log).unlink()
+        repaired = self.cli("check", run, "--remaining", code=2)
+        self.assertEqual(repaired["claims"]["first"]["status"], "PASS")
+        self.assertNotEqual(repaired["claims"]["first"]["latest"]["log"], first_log)
+        self.assertEqual(repaired["claims"]["second"], resumed["claims"]["second"])
+
+        (self.repo / "new.py").touch()
+        refreshed = self.cli("check", run, "--remaining", code=2)
+        for row in refreshed["claims"].values():
+            self.assertEqual(row["status"], "PASS")
+            self.assertEqual(row["latest"]["subject"], refreshed["subject"])
+
     def test_outcomes_bind_to_checked_subject_and_preserve_the_gate(self):
         run = self.start()
         args = (
