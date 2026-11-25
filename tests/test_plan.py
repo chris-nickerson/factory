@@ -104,6 +104,8 @@ class PlanTests(unittest.TestCase):
         for items in (
             [{**a, "run": "a" * 32}, {"id": "b", "task": "B", "run": "a" * 32}],
             [], [a, a], [{**a, "needs": ["unknown"]}], [{**a, "needs": "b"}],
+            [{**a, "needs": ["b", "b"]}, {"id": "b", "task": "Build B"}],
+            [{**a, "inputs": {}}], [{**a, "run": "a" * 32, "inputs": {"b": "subject"}}],
             [{**a, "needs": ["b"]}, {"id": "b", "task": "Build B", "needs": ["a"]}],
         ):
             with self.subTest(items=items):

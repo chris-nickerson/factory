@@ -24,10 +24,8 @@ def read_plan(path):
         if not isinstance(task, str) or not task.strip():
             raise ValueError(f"{key}: expected a nonempty task")
         needs = entry.get("needs", [])
-        if not isinstance(needs, list) or not all(isinstance(n, str) for n in needs):
-            raise ValueError(f"{key}: needs must be an array of item IDs")
-        if len(set(needs)) != len(needs):
-            raise ValueError(f"{key}: duplicate dependency")
+        if not isinstance(needs, list) or not all(isinstance(n, str) for n in needs) or len(set(needs)) != len(needs):
+            raise ValueError(f"{key}: needs must be an array of distinct item IDs")
         if "inputs" in entry:
             inputs = entry["inputs"]
             if not isinstance(inputs, dict) or not all(isinstance(v, str) for v in inputs.values()):
@@ -57,10 +55,10 @@ def inspect_item(entry, inputs):
         return dict(state="ATTENTION", reason="Run inputs differ from current prerequisites", current_inputs=inputs)
     try:
         report, code = evidence.status(Namespace(run=entry["run"]))
-        if report["task"] != entry["task"]:
-            raise ValueError("The run task differs from the plan item")
     except (ValueError, OSError, RuntimeError, KeyError, TypeError) as error:
         return dict(state="ATTENTION", reason=str(error))
+    if report["task"] != entry["task"]:
+        return dict(state="ATTENTION", reason="The run task differs from the plan item")
     return dict(
         state="VERIFIED" if code == 0 else "ATTENTION",
         evidence=report["status"],
