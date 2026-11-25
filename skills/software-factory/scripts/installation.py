@@ -73,6 +73,7 @@ def install(
     rollback=False,
     remove=False,
     dry_run=False,
+    commit=None,
 ):
     root = prefix / "lib/software-factory"
     current = root / "current"
@@ -167,10 +168,14 @@ def install(
             skill_dirs=list(map(str, skills)),
             previous=previous,
             update_origin=origin or saved.get("update_origin") or DEFAULT_ORIGIN,
+            commit=commit,
         ),
     )
     replace_link(current, release)
     return report
+
+
+HISTORY_DEPTH = 50
 
 
 def update(args):
@@ -187,8 +192,12 @@ def update(args):
     with installation_lock(prefix):
         saved = json.loads(manifest.read_text())
         origin = saved.get("update_origin", DEFAULT_ORIGIN)
+        previous = saved.get("commit")
         old = (root / "current").resolve(strict=True)
         env = git_environment()
+        progress = getattr(args, "progress", None)
+        if progress:
+            progress("Checking for a new Factory release")
         with tempfile.TemporaryDirectory(prefix="factory-update-") as directory:
             checkout = Path(directory)
             git(checkout, "init", "--quiet", env=env)
@@ -196,7 +205,7 @@ def update(args):
                 checkout,
                 "fetch",
                 "--quiet",
-                "--depth=1",
+                f"--depth={HISTORY_DEPTH}",
                 "--no-tags",
                 "--",
                 origin,
@@ -214,11 +223,86 @@ def update(args):
                 env=env,
             )
             commit = git(checkout, "rev-parse", "HEAD", env=env).stdout.decode().strip()
+            head = commit_log(checkout, "-1", "HEAD", env=env)[0]
+            changes = None
+            if previous and previous != commit:
+                changes = commit_log(checkout, f"{previous}..HEAD", env=env)
             report = install(
-                prefix, checkout / "skills/software-factory", origin=origin
+                prefix, checkout / "skills/software-factory", origin=origin, commit=commit
             )
     return dict(
         status="up_to_date" if Path(report["release"]) == old else "updated",
         commit=commit,
+        previous=previous,
         release=report["release"],
+        origin=origin,
+        head=head,
+        changes=changes,
     ), 0
+
+
+def commit_log(checkout, *revisions, env=None):
+    """Commits as dicts, or None when the range reaches past the fetched history."""
+    result = git(
+        checkout,
+        "log",
+        "--format=%H%x1f%s%x1f%cr",
+        *revisions,
+        "--",
+        check=False,
+        env=env,
+    )
+    if result.returncode:
+        return None
+    return [
+        dict(zip(("commit", "subject", "when"), line.split("\x1f")))
+        for line in result.stdout.decode(errors="replace").splitlines()
+    ]
+
+
+def display_origin(origin):
+    home = str(Path.home())
+    if os.path.isabs(origin):
+        return "~" + origin[len(home) :] if origin.startswith(home + "/") else origin
+    for scheme in ("https://", "http://", "ssh://", "git@"):
+        origin = origin.removeprefix(scheme)
+    return origin.removesuffix(".git").replace(":", "/", 1)
+
+
+def render_update(report, color=True):
+    def paint(code, text):
+        return f"\033[{code}m{text}\033[0m" if color else text
+
+    bold, dim = (lambda t: paint("1", t)), (lambda t: paint("2", t))
+    short = report["commit"][:7]
+    head = report["head"]
+    lines = [""]
+    if report["status"] == "up_to_date":
+        lines.append(f"  {paint('32', '✔')} {bold('Factory is up to date')}  {dim(short)}")
+        lines.append(f"    {head['subject']} {dim('· ' + head['when'])}")
+    else:
+        before = report["previous"]
+        arrow = f"{dim(before[:7])} {paint('36', '→')} " if before else ""
+        lines.append(
+            f"  {paint('32', '✔')} {bold('Factory updated')}  {arrow}{paint('1;36', short)}"
+        )
+        lines.append("")
+        changes = report["changes"] or [head]
+        shown = changes[:10]
+        width = min(60, max(len(c["subject"]) for c in shown))
+        for change in shown:
+            subject = change["subject"]
+            if len(subject) > width:
+                subject = subject[: width - 1] + "…"
+            lines.append(
+                f"    {paint('32', '+')} {paint('33', change['commit'][:7])} "
+                f"{subject.ljust(width)}  {dim(change['when'])}"
+            )
+        if len(changes) > len(shown):
+            lines.append(dim(f"      … and {len(changes) - len(shown)} more"))
+        if report["changes"] is None and before:
+            lines.append(dim(f"      (only the latest change is shown; the rest predate the last {HISTORY_DEPTH} commits)"))
+    lines.append("")
+    lines.append(dim(f"    from {display_origin(report['origin'])} @ main"))
+    lines.append("")
+    return "\n".join(lines)
