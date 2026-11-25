@@ -26,10 +26,9 @@ Use the brief to choose a workflow and guide your next actions. Pass the relevan
 | Implement, verify, refactor, measure performance, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
 | Write or revise a PR description | Use the [PR writing guide](references/pr-descriptions.md) and the target repository's template. |
 | Write, revise or clean up documentation | Use the [Factory writing guide](references/documentation.md). |
-| Design and implement a change, then deliver a PR ready for human review | Use [full delivery](references/delivery.md) from design through the verified PR handoff. |
+| Deliver an implementation with independent review, locally or as a new review-ready PR | Compose consensus if requested, your implementation, the size-based simplification rounds, a fresh independent review and final behavioral checks. When a PR is requested, verify its handoff. [Full delivery](references/delivery.md) |
 | Prepare an existing PR for review or babysit one | Use the [PR review workflow](references/delivery.md#pr-review-workflow). |
 | Attach a real-world correction to a prior run | Use `factory outcome` with the relevant run and observed behavior. [Later outcomes](references/local.md#later-outcomes) |
-| Deliver an implementation with simplification and independent review | Compose consensus if requested, your implementation, the size-based simplification rounds, a fresh independent review and final behavioral checks. [Delivery and continuation](references/delivery.md) |
 
 For a check-only request, run the local checks. If the request requires independent review, include the review step. For verification-only and review-only requests, report the requested results and stop.
 

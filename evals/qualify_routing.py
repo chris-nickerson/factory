@@ -13,22 +13,39 @@ ROOT = Path(__file__).resolve().parents[1]
 # A request that names a model has no tier to choose. Its role spec is scored.
 MODEL_NAMED_BY_USER = "opus"
 CASES = {
+    "existing-pr-round-limit": (
+        "Use Software Factory to babysit this existing PR for exactly one round and publish its fixes. You fixed failed CI, "
+        "pushed the fix and read back the new head, approval, open threads and replacement checks. "
+        "Those checks are running. I only asked for this round.",
+        "PR review workflow", True,
+    ),
     "delivery-start": (
         "Use Factory to agree on a design with a second model, implement a new button, "
         "and give me a PR ready for human review with a screenshot. The implementation agent "
         "may only edit locally; you own publication. Nothing has run yet.",
         "full delivery", True,
     ),
+    "delivery-local": (
+        "Use two models to agree on a design, implement it, simplify it and run the "
+        "independent review and final checks. Keep everything local. Nothing has started.",
+        "full delivery", False,
+    ),
     "delivery-pending": (
         "Use Factory to deliver the review-ready PR we agreed on. The design consensus was "
         "confirmed. A simplification session has just started. Unit tests pass, but browser "
-        "sign-in failed before reaching the new screen. I have an image of the generated PDF. "
+        "sign-in failed before reaching the new screen. You inspected an image of the generated PDF. "
         "The draft PR links to it. What has run, and do we have a screenshot?",
+        "full delivery", True,
+    ),
+    "delivery-local-recording": (
+        "Deliver the agreed PR with a recording reviewers can watch. Design, simplification, "
+        "final checks, independent review and CI finished. The PR is ready. You inspected "
+        "the screen recording locally and saw the requested action succeed. Reviewers confirmed the laptop link does not open.",
         "full delivery", True,
     ),
     "delivery-ready": (
         "Deliver the agreed review-ready PR and stop for human review. Design was confirmed; "
-        "all requested rounds finished. The checks and independent review passed on the "
+        "all simplification rounds finished. The checks and independent review passed on the "
         "pushed head. The forge shows a ready PR with green CI and a recording of the new "
         "screen in use. You have opened the recording. Only human approval remains.",
         "full delivery", True,
@@ -84,7 +101,7 @@ SCHEMA = {
     "properties": {
         "skill": {"type": "string"},
         "procedure": {
-            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "full delivery", "other"],
+            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "full delivery", "PR review workflow", "other"],
         },
         "publish": {"type": "boolean"},
         "tier": {
@@ -101,20 +118,22 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-# Probe the host's next action and whether it credits the supplied visual evidence.
 DELIVERY_DECISIONS = {
+    "existing-pr-round-limit": ("report round limit", False),
     "delivery-start": ("obtain design consensus", False),
     "delivery-pending": ("continue verification", False),
+    "delivery-local": ("obtain design consensus", False),
+    "delivery-local-recording": ("publish UI evidence", True),
     "delivery-ready": ("hand off to human", True),
 }
 DELIVERY_SCHEMA = {
     **SCHEMA,
     "properties": {
-        **SCHEMA["properties"],
-        "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "hand off to human"]},
-        "ui_evidence_available": {"type": "boolean", "description": "The requested screen has been demonstrated."},
+        **{key: SCHEMA["properties"][key] for key in ("skill", "procedure", "publish")},
+        "next_action": {"enum": ["report round limit", "obtain design consensus", "implement", "continue verification", "publish UI evidence", "end before the requested stopping point", "hand off to human"]},
+        "inspected_screen_capture": {"type": "boolean", "description": "You inspected a capture showing the requested screen and action, wherever it is stored."},
     },
-    "required": [*SCHEMA["required"], "next_action", "ui_evidence_available"],
+    "required": ["skill", "procedure", "publish", "next_action", "inspected_screen_capture"],
 }
 
 
@@ -157,7 +176,12 @@ def main():
         name, trial = job
         prompt, route, publish, *tier = CASES[name]
         prefix = out / f"{name}-{trial}"
-        selected_schema = delivery_schema if name in DELIVERY_DECISIONS else schema
+        if name in DELIVERY_DECISIONS:
+            selected_schema = delivery_schema
+            question = "What should you do next? Have you inspected a capture of the requested screen and action?"
+        else:
+            selected_schema = schema
+            question = "Which model tier and role flag would you pass?"
         argv = [
             "codex", "--no-daemon", "-a", "never", "exec", "--ephemeral",
             "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
@@ -184,8 +208,8 @@ def main():
                 stderr=errors,
                 input=(
                     "Read the request as a coding agent in this project. Select the installed skill and procedure "
-                    "you would use. Report whether the latest request authorizes publication, "
-                    "which model tier you would pass, and any role flag you would pass. "
+                    "you would use. Report whether the latest request authorizes publication. "
+                    f"{question} "
                     "Read any guidance you need, and stop before running the selected procedure.\n\n"
                     + prompt
                 ),
@@ -195,25 +219,18 @@ def main():
             observed = json.loads(prefix.with_suffix(".jsonl").read_text()).get("structured_output")
         elif result.returncode == 0:
             observed = json.loads(prefix.with_suffix(".json").read_text())
-        expected = dict(
-            skill="software-factory", procedure=route, publish=publish,
-            tier=tier[0] if tier else "role default",
-        )
+        tier = tier[0] if tier else "role default"
+        expected = dict(skill="software-factory", procedure=route, publish=publish)
         if name in DELIVERY_DECISIONS:
-            expected["next_action"], expected["ui_evidence_available"] = DELIVERY_DECISIONS[name]
-            # A delivery spans roles with separate model choices.
-            del expected["tier"]
+            expected["next_action"], expected["inspected_screen_capture"] = DELIVERY_DECISIONS[name]
+        elif tier != MODEL_NAMED_BY_USER:
+            expected["tier"] = tier
+        else:
             (observed or {}).pop("tier", None)
         role_spec = (observed or {}).pop("role_spec", "")
-        named_model_kept = True
-        if expected.get("tier") == MODEL_NAMED_BY_USER:
-            del expected["tier"]
-            (observed or {}).pop("tier", None)
-            named_model_kept = bool(
-                re.fullmatch(
-                    rf"--simplifier[ =](claude)?:{MODEL_NAMED_BY_USER}", role_spec.strip()
-                )
-            )
+        named_model_kept = tier != MODEL_NAMED_BY_USER or bool(
+            re.fullmatch(rf"--simplifier[ =](claude)?:{MODEL_NAMED_BY_USER}", role_spec.strip())
+        )
         return dict(case=name, trial=trial, observed=observed, expected=expected,
                     role_spec=role_spec, cli_exit=result.returncode,
                     passed=observed == expected and named_model_kept)
