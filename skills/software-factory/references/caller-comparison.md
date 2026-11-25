@@ -1,10 +1,10 @@
 # Try the simpler path against its caller
 
-Use this pilot to decide whether a short change to the task brief saves maintainer time. It uses the usual implementation, simplification and independent review procedures.
+Use this pilot to decide whether a short change to the task brief saves maintainer time. It uses the usual implementation, simplification and independent review procedures. Only the arms of an enrolled trial use the candidate brief. The current workflow stays the default unless the confirmation in step 6 passes.
 
 ## Candidate task brief
 
-Add the following paragraph to the author's task brief in the candidate arm. Include it and any relevant observation in the simplifier's existing `--task` context.
+In the candidate arm, add the following paragraph to the author's task brief. Also pass it to `factory simplify` in `--task`, along with any relevant observations. Leave the [canonical simplifier prompt](reconsider-from-first-principles.v1.txt) unchanged.
 
 > Before adding a second implementation path or deleting an apparently duplicate guard, identify the caller, saved input or external constraint that could distinguish the two paths. Try the simpler implementation against that case. Reuse an existing check or make a disposable probe. For a guard, exercise both an accepted input and the violation it rejects. Use the observed result to choose the implementation and carry it into the handoff. If the paths behave alike for the supported cases, prefer the simpler one. If the evidence is missing, preserve the known contract and state what you could not verify. For routine edits with no such choice, proceed as usual.
 
@@ -12,9 +12,23 @@ For example, an assessment written by an older release can reach the commit step
 
 ## Compare with the current workflow
 
-1. Enroll four wanted tasks before inspecting agent output. Include a local behavior change, a multi-caller change, a compatibility or external-tool change and a routine control. Reserve a realistic follow-on edit and an independent acceptance check for each task. Keep both hidden from the initial agent. Agree on value weights before the trial or give equally valuable tasks equal weight.
-2. Run each task twice in separate worktrees from the same revision. Use the current brief in one and add the paragraph above in the other. Match model and harness versions, allowed tools, checks, simplification rounds, spend caps and time limits. Randomize order within each pair. Alternate which result the maintainer reads first. Keep task budgets and unsuccessful attempts in the trial record.
-3. Give a fresh agent the resulting checkout and the reserved maintenance request. Use the same ordinary maintenance workflow for both candidates. Have a reviewer who does not know the assignment judge both stages against the same contracts. Count a task as successful only when the original behavior and follow-on change pass, including the final review required for delivery.
-4. For each attempt record the task, arm, revisions, run IDs, initial and follow-on results, owner minutes spent briefing, answering, reviewing and repairing, and interruptions. Record elapsed time for each stage, time to a correct follow-on, confirmed defects, repair cycles, tokens and model dollars at the same prices. Include blocked tasks, timeouts, retries and reverts. They consume resources and earn zero value until the outcome is delivered. Keep the records outside the checkout.
-5. Divide each arm's total successful task value by all its owner hours. Advance only with at least 20% more value per owner hour, lower owner minutes in three of four pairs, at least as many successes and no new serious defect or broken contract. Allow at most 10% higher median initial elapsed time, median time to a correct follow-on, or total model spend. Report missing and censored observations. If they could reverse the decision, keep the current workflow.
-6. Before adopting the practice, repeat on eight new real tasks in four scope-matched pairs. Randomize one task per pair to each arm. At day 30 credit only shipped changes still serving the requested outcome with no unresolved corrective work. Charge repairs to the original arm and report unknown exposure. Apply the same thresholds. Keep the practice scoped to the kinds of tasks that benefited.
+1. **Enroll the tasks.** Before inspecting any agent output, choose four wanted tasks: a local behavior change, a multi-caller change, a compatibility or external-tool change and a routine control. For each task, reserve a realistic follow-on edit and an independent acceptance check, and keep both hidden from the initial agent. Agree on value weights now, or give equally valuable tasks equal weight.
+2. **Run matched pairs.** Run each task twice in separate worktrees from the same revision, once with the current brief and once with the paragraph above. Match model and harness versions, allowed tools, checks, simplification rounds, spend caps and time limits. Randomize order within each pair, and alternate which result the maintainer reads first.
+3. **Run the follow-on.** Give a fresh agent each resulting checkout with the reserved maintenance request, using the same ordinary workflow for both. A reviewer who does not know the assignment judges both stages against the same contracts. A task succeeds only when the original behavior and the follow-on change pass, including the final review required for delivery.
+4. **Record every attempt.** Keep the records outside the checkout. For each attempt, record:
+   - task, arm, budget, revisions and run IDs
+   - initial and follow-on results, confirmed defects and repair cycles
+   - owner minutes spent briefing, answering, reviewing and repairing, and interruptions
+   - elapsed time for each stage and time to a correct follow-on
+   - tokens and model dollars at the same prices
+
+   Include blocked tasks, timeouts, retries and reverts. They count toward cost and earn zero value until the outcome is delivered.
+5. **Decide whether to advance.** Divide each arm's total successful task value by all of its owner hours. Advance the candidate only if, compared with the current workflow, it has:
+   - at least 20% more value per owner hour
+   - fewer owner minutes in at least three of four pairs
+   - at least as many successes
+   - no new serious defect or broken contract
+   - no more than 10% higher median initial elapsed time, median time to a correct follow-on or total model spend
+
+   Report missing and censored observations. If they could reverse the decision, keep the current workflow.
+6. **Confirm before adopting.** Repeat on eight new real tasks in four scope-matched pairs, randomizing one task in each pair to each arm. At day 30, credit only shipped changes that still serve the requested outcome with no unresolved corrective work. Charge repairs to the original arm and report unknown exposure. Apply the thresholds from step 5. If the candidate passes, adopt it only for the kinds of tasks that benefited.
