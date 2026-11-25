@@ -10,11 +10,11 @@ Keep one source for each fact. If the code or `--help` already gives a default o
 
 ## Review comments in the diff
 
-Read each changed comment, docstring and suppression beside the code it describes. Preserve license notices and public contracts, including inputs, outputs, errors and side effects. Keep a concise explanation where a reader could reasonably make the wrong change without knowing why the code is shaped that way. Remove narration, abandoned code and change history.
+Read each changed comment, docstring and suppression beside the code it describes. Preserve license notices and public contracts, including inputs, outputs, errors and side effects. Keep a concise explanation where a reader could reasonably make the wrong change without knowing why the code is shaped that way. Remove narration, abandoned code and change history. If a comment says two values must always agree, consider deriving one from the other or enforcing the invariant at the write boundary.
 
 When a comment describes a workaround, follow it to the cause. For a dependency or platform constraint, verify the affected version and behavior using the pinned source, an upstream issue or a reproduction. Keep the reason near the affected call. If Factory or the target project owns the cause, fix it within the task's scope. For a cause outside scope, retain any explanation still needed for safe maintenance and report what remains.
 
-For a lint or type-check suppression, identify the exact diagnostic and run the checker with the suppression removed. Fix a genuine defect. When the checker rejects a valid case, keep the narrowest justified exception. If a comment says two values must always agree, consider deriving one from the other or enforcing the invariant at the write boundary. Verify the original failure before deleting the explanation.
+For a lint or type-check suppression, identify the exact diagnostic and run the checker with the suppression removed. Fix a genuine defect. When the checker rejects a valid case, keep the narrowest justified exception.
 
 ## Change documentation with the code
 
