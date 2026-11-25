@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 
-from workspace import git, release_id, write_json
+from workspace import SKILL_RELEASE_PATHS, git, release_id, write_json
 
 
 DEFAULT_ORIGIN = "https://github.com/chris-nickerson/factory.git"
@@ -66,15 +66,10 @@ def replace_link(link, target):
 
 
 def skill_links(current):
-    return {
-        "release": current,
-        "references": current / "references",
-        "scripts": current / "scripts",
-    }
+    return {name: current / path for name, path in SKILL_RELEASE_PATHS.items()}
 
 
-def is_skill_entry(path, current, templates):
-    """Whether path is an unmodified skill directory published by this installation."""
+def is_managed_skill_directory(path, current, templates):
     links = skill_links(current)
     entry = path / "SKILL.md"
     return (
@@ -89,7 +84,6 @@ def is_skill_entry(path, current, templates):
 
 
 def publish_default_skill(path, current, template):
-    """Publish a regular SKILL.md beside links into current, or the link older releases expect."""
     with tempfile.TemporaryDirectory(dir=path.parent) as temp:
         stage = Path(temp) / "skill"
         if template.is_file():
@@ -152,7 +146,7 @@ def install(
     for link, target in destinations.items():
         if not os.path.lexists(link) or link_target(link) == str(target):
             continue
-        if link != default_skill or not is_skill_entry(link, current, entries):
+        if link != default_skill or not is_managed_skill_directory(link, current, entries):
             raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
     if rollback:

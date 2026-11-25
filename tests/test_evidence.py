@@ -391,6 +391,27 @@ class FactoryTests(unittest.TestCase):
         link.symlink_to(foreign, target_is_directory=True)
         self.assertEqual(self.cli("status", run, code=2)["status"], "BLOCKED")
 
+    def test_evidence_binds_to_release_behind_discoverable_skill(self):
+        subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "install.py"),
+                "--prefix",
+                str(self.home / "prefix"),
+            ],
+            env={**self.env, "HOME": str(self.repo)},
+            check=True,
+            capture_output=True,
+        )
+        run = self.start(
+            [dict(id="python", expect="Python runs", argv=[sys.executable, "-V"])]
+        )
+        self.assertEqual(self.cli("check", run)["status"], "VERIFIED")
+        guidance = self.repo / ".agents/skills/software-factory/references/local.md"
+        guidance.write_text("modified after verification")
+        blocked = self.cli("status", run, code=2)
+        self.assertIn("Installed Factory release changed", blocked["error"])
+
     def test_release_upgrade_and_rollback(self):
         clone = self.home / "factory-source"
         shutil.copytree(ROOT / "skills", clone / "skills")

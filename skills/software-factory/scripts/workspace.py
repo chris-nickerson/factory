@@ -133,30 +133,46 @@ def release_id(root):
     return release_digests(root)[0]
 
 
-def installed_skill_release(link, directory):
-    """Recognize an installer-owned link and verify its actual release bytes."""
-    if link.name != "software-factory":
+SKILL_RELEASE_PATHS = {"release": "", "references": "references", "scripts": "scripts"}
+
+
+def installed_skill_release(link, destination):
+    target = link.readlink()
+    if link.name == "software-factory":
+        skill_root, relative = link.parent, ""
+    elif link.parent.name == "software-factory" and link.name in SKILL_RELEASE_PATHS:
+        skill_root, relative = link.parent.parent, SKILL_RELEASE_PATHS[link.name]
+    else:
         return None
-    current = link.readlink()
-    if not current.is_absolute() or current.name != "current":
+    current = target.parent if relative else target
+    if (
+        not current.is_absolute()
+        or current.name != "current"
+        or target != current / relative
+    ):
         return None
     root = current.parent
     if (
         root.name != "software-factory"
         or root.parent.name != "lib"
         or not current.is_symlink()
-        or directory.parent != root / "releases"
-        or not re.fullmatch(r"[a-f0-9]{64}", directory.name)
+    ):
+        return None
+    release = current.resolve()
+    if (
+        destination != release / relative
+        or release.parent != root / "releases"
+        or not re.fullmatch(r"[a-f0-9]{64}", release.name)
     ):
         return None
     manifest = root / "installation.json"
-    if not manifest.is_file() or str(link.parent) not in json.loads(
+    if not manifest.is_file() or str(skill_root) not in json.loads(
         manifest.read_text()
     ).get("skill_dirs", []):
         return None
-    content, modes = release_digests(directory)
-    if content != directory.name:
-        raise ValueError(f"Installed Factory release changed: {directory}")
+    content, modes = release_digests(release)
+    if content != release.name:
+        raise ValueError(f"Installed Factory release changed: {release}")
     return f"{content}:{modes}"
 
 
@@ -223,6 +239,8 @@ def snapshot(repo, *, plain_directory=False):
                 with dest.open("rb") as stream:
                     field(hashlib.file_digest(stream, "sha256").digest())
                 field(str(dest.stat().st_mode).encode())
+            elif dest.is_dir() and (release := installed_skill_release(p, dest)):
+                field(release.encode())
             elif dest.is_dir() and dest.is_relative_to(repo):
                 # The source set hashes files in an internal link's target separately.
                 # An ignored directory or uninitialized checkout cannot be verified this way.
@@ -231,8 +249,6 @@ def snapshot(repo, *, plain_directory=False):
                     raise ValueError(
                         f"Directory link {p} points outside the verified source set"
                     )
-            elif dest.is_dir() and (release := installed_skill_release(p, dest)):
-                field(release.encode())
             else:
                 raise ValueError(
                     f"Cannot bind directory or special-file link {p} to this source set"
