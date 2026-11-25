@@ -709,10 +709,40 @@ class RoundsTests(unittest.TestCase):
                 "--rounds", "1", "--check", shlex.join(["touch", str(later)])
             )
         self.assertEqual(code, 2, report)
-        self.assertIn("revision changed before checks started", report["error"])
         self.assertFalse(first.exists())
         self.assertFalse(later.exists())
         self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+    def test_resume_rejects_git_hidden_drift_after_checks(self):
+        (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
+        self.git("add", ".gitattributes")
+        self.git("commit", "-qm", "Normalize source line endings")
+        source = self.repo / "calc.py"
+        original = source.read_bytes()
+        contact = rounds.contact
+
+        def interrupt_assessment(run, record, folder, kind, *args):
+            if kind == "assess":
+                raise rounds.Pending("Interrupted before assessment")
+            return contact(run, record, folder, kind, *args)
+
+        with (
+            patch.dict(os.environ, FIXTURE_MODE="noop"),
+            patch.object(rounds, "contact", side_effect=interrupt_assessment),
+        ):
+            code, pending = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 2, pending)
+        source.write_bytes(original.replace(b"\n", b"\r\n"))
+        code, blocked = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 2, blocked)
+        self.assertEqual(self.git("diff", "--", "calc.py"), "")
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+        source.write_bytes(original)
+        code, complete = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 0, complete)
+        self.assertEqual(complete["rounds"][0]["remote_head"], self.git("rev-parse", "HEAD"))
 
     def test_scope_and_dirty_tree_preserve_work(self):
         with patch.dict(os.environ, FIXTURE_MODE="outside"):

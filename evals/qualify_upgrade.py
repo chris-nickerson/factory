@@ -21,6 +21,8 @@ proposal = "Keep the local contract.\\nSTATUS: RESOLUTION_PROPOSED"
 accept = "ACCEPT: turn_001_a.md\\nSTATUS: CONFIRMED"
 if Path(sys.argv[0]).name == "claude":
     key = "--resume" if "--resume" in args else "--session-id"
+    if key == "--session-id" and Path(os.environ["FACTORY_QUALIFICATION_HOLD"]).exists():
+        sys.exit(1)
     result = accept if key == "--resume" else proposal
     if prompt.startswith("Assess the coordinator"):
         result = "STATUS: VERIFIED"
@@ -52,6 +54,7 @@ def qualify(baseline, home):
     cli = prefix / "bin/factory"
     skill = home / ".agents/skills/software-factory"
     calls = home / "calls"
+    hold = home / "pause-provider"
     tools = home / "fixture-tools"
     tools.mkdir()
     for name in ("codex", "claude"):
@@ -63,6 +66,7 @@ def qualify(baseline, home):
         "HOME": str(home),
         "FACTORY_STATE_DIR": str(home / "state"),
         "FACTORY_QUALIFICATION_CALLS": str(calls),
+        "FACTORY_QUALIFICATION_HOLD": str(hold),
         "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
     }
 
@@ -103,31 +107,32 @@ def qualify(baseline, home):
     old_install = run(sys.executable, baseline / "install.py")
     old_entry = (skill / "SKILL.md").read_bytes()
     old_evidence = check_with_installed_cli()
-    old_dialogue = run(cli, "consensus", "design", "--repo", target, "--task", "Choose a contract")
-    if old_dialogue["status"] != "confirmed":
-        raise RuntimeError(old_dialogue)
+    hold.touch()
+    old_dialogue = run(cli, "consensus", "design", "--repo", target,
+                       "--task", "Choose a contract", expected=2)
     old_rounds = run(cli, "simplify", "--repo", worktree, "--base", "main",
-                     "--task", "Keep the answer ready", "--check", "grep -Fx ready answer.txt")
-    before_upgrade = calls.read_bytes()
+                     "--task", "Keep the answer ready", "--check", "grep -Fx ready answer.txt", expected=2)
+    hold.unlink()
+    before_upgrade = calls.read_text().splitlines()
 
     new_install = run(sys.executable, ROOT / "install.py")
     if old_install["release"] == new_install["release"]:
         raise RuntimeError("Choose a baseline with a different installable payload")
     replayed = run(cli, "consensus", "resume", old_dialogue["run"])
-    decision_fields = ("run", "subject", "status", "proposal", "decision", "turns")
     if (
-        any(replayed[field] != old_dialogue[field] for field in decision_fields)
-        or calls.read_bytes() != before_upgrade
+        replayed["status"] != "confirmed"
+        or replayed["subject"] != old_dialogue["subject"]
+        or replayed["proposal"] != "turn_001_a.md"
+        or calls.read_text().splitlines()[len(before_upgrade):] != ["claude", "claude", "codex"]
     ):
-        raise RuntimeError("Resuming the old decision changed its result or dispatched a provider")
-    for options in (("--status",), ()):
-        rounds = run(cli, "simplify", "--resume", old_rounds["id"], *options)
-        old_checkpoints = [(row["session_id"], row["output"]) for row in old_rounds["rounds"]]
-        checkpoints = [(row["session_id"], row["output"]) for row in rounds["rounds"]]
-        if rounds["status"] != "complete" or checkpoints != old_checkpoints:
-            raise RuntimeError("The upgrade changed the old simplification checkpoints")
-    if calls.read_bytes() != before_upgrade:
-        raise RuntimeError("Reading an old checkpoint dispatched a provider")
+        raise RuntimeError("The old consensus failed to resume or repeated its opening")
+    rounds = run(cli, "simplify", "--resume", old_rounds["run"], "--recover")
+    if rounds["status"] != "complete" or len(rounds["rounds"]) != rounds["target_rounds"]:
+        raise RuntimeError("The old simplification did not complete after upgrade")
+    after_recovery = calls.read_bytes()
+    current = run(cli, "simplify", "--resume", old_rounds["run"], "--status")
+    if current["status"] != "complete" or calls.read_bytes() != after_recovery:
+        raise RuntimeError("Reading a completed checkpoint changed its status or dispatched a provider")
     if evidence_result(run(cli, "status", old_evidence["run"])) != evidence_result(old_evidence):
         raise RuntimeError("The upgrade changed the old evidence result")
     source.write_text("changed\n")
@@ -135,6 +140,8 @@ def qualify(baseline, home):
     if stale["claims"]["ready"]["status"] != "STALE":
         raise RuntimeError(stale)
     source.write_text("ready\n")
+    if evidence_result(run(cli, "check", old_evidence["run"])) != evidence_result(old_evidence):
+        raise RuntimeError("The historical evidence contract failed on recheck")
     new_evidence = check_with_installed_cli()
 
     rollback = run(sys.executable, ROOT / "install.py", "--rollback")
@@ -142,7 +149,7 @@ def qualify(baseline, home):
         raise RuntimeError("Rollback did not restore the old release and skill entry")
     if evidence_result(run(cli, "status", new_evidence["run"])) != evidence_result(new_evidence):
         raise RuntimeError("The rollback executable could not read candidate-written evidence")
-    print("Verified old evidence, consensus and simplification, and installed rollback.")
+    print("Verified old evidence recheck, active consensus and simplification resume, and installed rollback.")
 
 
 def main():

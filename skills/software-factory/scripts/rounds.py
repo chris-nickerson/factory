@@ -322,8 +322,15 @@ def check_candidate(run, record, folder):
             raise Pending(
                 "Checks changed the working inputs. Inspect the changes and resume."
             )
-    record.update(tree=before, phase="assess")
+    record.update(tree=before, working_inputs=working_inputs, phase="assess")
     save(folder / "state.json", run)
+
+
+def ensure_checked_working_inputs(run, record):
+    if "working_inputs" in record and (
+        snapshot(run["repo"], follow_symlinks=False) != record["working_inputs"]
+    ):
+        raise Pending("Working inputs changed after checks. Restore the checked candidate before resuming.")
 
 
 def execute(run, folder, recover=False, accepted_head=None):
@@ -378,6 +385,7 @@ def execute(run, folder, recover=False, accepted_head=None):
                 raise Pending(
                     "Candidate changed after checks. Inspect it before continuing."
                 )
+            ensure_checked_working_inputs(run, record)
             contact(run, record, folder, "assess", assess_prompt(record, folder), "")
         elif phase == "repair":
             repairs = sum(c["kind"] == "repair" for c in record["calls"])
@@ -395,6 +403,8 @@ def execute(run, folder, recover=False, accepted_head=None):
                 "",
             )
         elif phase == "commit":
+            if rev(run["repo"], "HEAD") == record["input"]:
+                ensure_checked_working_inputs(run, record)
             output = commit_checked_tree(run, record, folder, accepted_head)
             record.update(output=output, phase="publish")
             save(folder / "state.json", run)
