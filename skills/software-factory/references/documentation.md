@@ -56,13 +56,11 @@ For a lint or type-check suppression, identify the exact diagnostic and run the 
 
 Update or remove any documentation the code change makes false in the same change. Edit the existing explanation instead of appending an update. Reread the whole document and delete anything that no longer helps the reader.
 
-Make claims readers can check. Run example commands as written and verify the links. If the repository has a test that checks links or examples, run it.
-
 ## Review a writing change
 
 1. Read the changed text with the issue closed. Check whether a new reader can identify the next action, its conditions and its expected result.
 2. Trace changed strings to their consumers. Preserve protocol lines, pinned prompts, fixtures, license text and exact output that callers rely on. Keep existing public links and anchors usable.
-3. Exercise changed procedures, help and diagnostics through their entry points. For routing, check a neighboring request with a different correct outcome. Compare what the host loaded and what the agent attempted.
+3. Make claims readers can check. Run changed examples as written, verify the links and run any repository test for links or examples. Exercise changed procedures, help and diagnostics through their entry points. For routing, check a neighboring request with a different correct outcome. Compare what the host loaded and what the agent attempted.
 4. [Review the changed comments and docstrings](#review-comments-in-the-diff) beside the code.
 
 Use sentence length and terminology reports to find passages worth reading. Judge the result by whether readers can complete the task and preserve the contract.

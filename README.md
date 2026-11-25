@@ -1,10 +1,8 @@
 # Software Factory
 
-I’m building Software Factory around how I want to work with coding agents. When I describe a bug, I want the agent to figure out why it happens before changing the code. When I ask for a second opinion, I want someone to look at the problem independently. When the work is done, I want to see what changed and what I can rely on.
+I want coding agents to understand a problem before they change code, make the smallest change that holds up, and give me enough evidence to decide what to do next. Sometimes that means shipping a small fix. Sometimes it means finding the missing evidence, simplifying a design, or leaving the code alone. I’m building Software Factory to grow into a way of working across the whole engineering task, from the first question through the pull request.
 
-I want Factory to grow into a toolkit I can use across projects, from the first question through the pull request. I care about making changes a teammate can understand and maintain. Sometimes that means shipping a small fix. Sometimes it means finding the missing evidence, simplifying a design, or leaving code alone.
-
-Today, Factory is an agent skill and a local CLI. The skill reads your request and chooses a workflow. It uses the repository’s own instructions and tools, and it carries your constraints through the work. The CLI runs checks, keeps results, and coordinates separate model sessions when a workflow calls for them.
+Today, Factory is an installable agent skill and a local CLI. The skill reads your request, chooses a workflow, and carries your constraints through the work using the repository’s own instructions and tools. The CLI runs checks, saves their results against a fingerprint of the workspace, and coordinates separate model sessions when a workflow calls for them. The checks and saved records are only as trustworthy as the local account that runs them.
 
 ## What you can ask for
 
@@ -13,7 +11,8 @@ Today, Factory is an agent skill and a local CLI. The skill reads your request a
 | Fix a bug or build a change | Confirm the behavior through a real entry point, make the change, and show what happens afterward. |
 | Decide between designs or diagnose a hard problem | Have Codex and Claude Opus investigate independently, then compare the evidence behind their conclusions. |
 | Simplify a branch | Give fresh Opus sessions the branch, its constraints, and the checks it must pass. |
-| Upgrade a dependency | Find which version the project actually installs and check the code that uses it. |
+| Upgrade a dependency or clear a scanner alert | Find which version the project actually installs and check the code that uses it. |
+| Review a change | Have a fresh Codex session review the scoped diff and back each finding with the case that triggers it. |
 | Prepare a pull request | Explain the change, follow CI and review feedback, and fix confirmed issues. |
 | Improve documentation | Check what the project does and write instructions someone can follow without reading the ticket. |
 
