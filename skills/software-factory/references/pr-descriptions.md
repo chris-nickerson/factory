@@ -12,11 +12,11 @@ Read the request, the final diff against the intended base, the check results an
 
 **Show the same case before and after.** If one sentence explains the cause, use it. When the reader would have to sketch what happened, choose the smallest illustration that explains the result. Hold the input and conditions fixed, use the same labels and units, and end with what a user or caller observes. Use aligned timelines for a deadline, a table for a decision, a short trace for a handoff, or sample input and output for an API contract.
 
-For example:
+In this fictional PR, the author ran the same export on both revisions:
 
 > Large order exports stopped after the first page, so some orders were missing from the CSV. The exporter now requests each remaining page before it closes the file.
 >
-> A regression test exported five orders across three pages. The CSV contained all five orders and one header row.
+> The regression test used pages of two, two and one order. On the base revision the CSV contained only the first two orders. On the fix it contained all five and one header row.
 >
 > | Five orders on three pages | Pages read | Orders in the CSV |
 > |---|---|---|
