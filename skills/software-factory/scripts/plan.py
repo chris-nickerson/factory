@@ -4,6 +4,7 @@ from argparse import Namespace
 from graphlib import CycleError, TopologicalSorter
 import json
 from pathlib import Path
+from subprocess import CalledProcessError
 
 import evidence
 
@@ -55,7 +56,7 @@ def inspect_item(entry, inputs):
         return dict(state="ATTENTION", reason="Run inputs differ from current prerequisites", current_inputs=inputs)
     try:
         report, code = evidence.status(Namespace(run=entry["run"]))
-    except (ValueError, OSError, RuntimeError, KeyError, TypeError) as error:
+    except (CalledProcessError, ValueError, OSError, RuntimeError, KeyError, TypeError) as error:
         return dict(state="ATTENTION", reason=str(error))
     if report["task"] != entry["task"]:
         return dict(state="ATTENTION", reason="The run task differs from the plan item")

@@ -33,7 +33,7 @@ class PlanTests(unittest.TestCase):
 
     def verified(self, task):
         repo = self.root / task
-        repo.mkdir()
+        repo.mkdir(exist_ok=True)
         (repo / "accepted").write_text("yes")
         run = self.cli("start", "--repo", repo, "--task", task, "--contract", self.contract)["run"]
         self.cli("check", run)
@@ -78,19 +78,24 @@ class PlanTests(unittest.TestCase):
         self.assert_plan(items, current, ["release", "docs"])
 
     def test_unavailable_receipts_leave_independent_work_ready(self):
-        run = self.verified("api")
+        api = self.verified("api")
+        lock, = (self.state / "locks").iterdir()
+        (self.root / "git").mkdir()
+        subprocess.run(["git", "init", "-q", self.root / "git"], check=True)
         items = [
-            {"id": "api", "task": "api", "run": run},
+            {"id": "api", "task": "api", "run": api},
+            {"id": "git", "task": "git", "run": self.verified("git")},
             {"id": "missing", "task": "missing", "run": "0" * 32},
-            {"id": "release", "task": "release", "needs": ["api", "missing"]},
+            {"id": "release", "task": "release", "needs": ["api", "git", "missing"]},
             {"id": "docs", "task": "docs"},
         ]
-        lock, = (self.state / "locks").iterdir()
+        (self.root / "git" / ".git" / "index").write_text("corrupt")
         with lock.open("a") as handle:
             fcntl.flock(handle, fcntl.LOCK_EX)
             self.assert_plan(
-                items, dict(api="ATTENTION", missing="ATTENTION", release="WAITING", docs="READY"),
-                ["api", "missing", "docs"],
+                items,
+                dict(api="ATTENTION", git="ATTENTION", missing="ATTENTION", release="WAITING", docs="READY"),
+                ["api", "git", "missing", "docs"],
             )
 
     def test_matching_task_is_required_to_finish(self):
