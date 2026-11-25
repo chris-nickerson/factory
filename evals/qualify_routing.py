@@ -13,6 +13,26 @@ ROOT = Path(__file__).resolve().parents[1]
 # A request that names a model has no tier to choose. Its role spec is scored.
 MODEL_NAMED_BY_USER = "opus"
 CASES = {
+    "delivery-start": (
+        "Use Factory to agree on a design with a second model, implement a new button, "
+        "and give me a PR ready for human review with a screenshot. The implementation agent "
+        "may only edit locally; you own publication. Nothing has run yet.",
+        "full delivery", True,
+    ),
+    "delivery-pending": (
+        "Use Factory to deliver the review-ready PR we agreed on. The design consensus was "
+        "confirmed. A simplification session has just started. Unit tests pass, but browser "
+        "sign-in failed before reaching the new screen. I have an image of the generated PDF. "
+        "The draft PR links to it. What has run, and do we have a screenshot?",
+        "full delivery", True,
+    ),
+    "delivery-ready": (
+        "Deliver the agreed review-ready PR and stop for human review. Design was confirmed; "
+        "all requested rounds finished. The checks and independent review passed on the "
+        "pushed head. The forge shows a ready PR with green CI and a recording of the new "
+        "screen in use. You have opened the recording. Only human approval remains.",
+        "full delivery", True,
+    ),
     "checks": (
         "Use Software Factory to check the parser behavior I specify. I only want local checks and no review.",
         "local",
@@ -64,7 +84,7 @@ SCHEMA = {
     "properties": {
         "skill": {"type": "string"},
         "procedure": {
-            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "other"],
+            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "full delivery", "other"],
         },
         "publish": {"type": "boolean"},
         "tier": {
@@ -79,6 +99,22 @@ SCHEMA = {
     },
     "required": ["skill", "procedure", "publish", "tier", "role_spec"],
     "additionalProperties": False,
+}
+
+# Probe the host's next action and whether it credits the supplied visual evidence.
+DELIVERY_DECISIONS = {
+    "delivery-start": ("obtain design consensus", False),
+    "delivery-pending": ("continue verification", False),
+    "delivery-ready": ("hand off to human", True),
+}
+DELIVERY_SCHEMA = {
+    **SCHEMA,
+    "properties": {
+        **SCHEMA["properties"],
+        "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "hand off to human"]},
+        "ui_evidence_available": {"type": "boolean", "description": "The requested screen has been demonstrated."},
+    },
+    "required": [*SCHEMA["required"], "next_action", "ui_evidence_available"],
 }
 
 
@@ -106,6 +142,8 @@ def main():
     )
     schema = out / "result-schema.json"
     schema.write_text(json.dumps(SCHEMA))
+    delivery_schema = out / "delivery-schema.json"
+    delivery_schema.write_text(json.dumps(DELIVERY_SCHEMA))
     version = subprocess.check_output([args.host, "--version"], text=True).strip()
     if args.host == "claude":
         # Claude Code discovers project skills in .claude/skills.
@@ -119,20 +157,21 @@ def main():
         name, trial = job
         prompt, route, publish, *tier = CASES[name]
         prefix = out / f"{name}-{trial}"
+        selected_schema = delivery_schema if name in DELIVERY_DECISIONS else schema
         argv = [
             "codex", "--no-daemon", "-a", "never", "exec", "--ephemeral",
             "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
             "--sandbox", "read-only", "--disable", "apps", "--disable", "plugins",
             "--disable", "hooks", "--disable", "multi_agent", "--disable",
             "multi_agent_v2", "-c", "mcp_servers={}", "--json", "--output-schema",
-            schema, "-o", prefix.with_suffix(".json"),
+            selected_schema, "-o", prefix.with_suffix(".json"),
         ]
         if args.host == "claude":
             argv = [
                 "claude", "--print", "--strict-mcp-config", "--mcp-config",
                 '{"mcpServers":{}}', "--tools", "Read,Glob,Grep,Skill",
                 "--permission-mode", "dontAsk", "--output-format", "json",
-                "--json-schema", json.dumps(SCHEMA),
+                "--json-schema", selected_schema.read_text(),
             ]
         if args.model:
             argv.extend(["--model", args.model])
@@ -160,9 +199,14 @@ def main():
             skill="software-factory", procedure=route, publish=publish,
             tier=tier[0] if tier else "role default",
         )
+        if name in DELIVERY_DECISIONS:
+            expected["next_action"], expected["ui_evidence_available"] = DELIVERY_DECISIONS[name]
+            # A delivery spans roles with separate model choices.
+            del expected["tier"]
+            (observed or {}).pop("tier", None)
         role_spec = (observed or {}).pop("role_spec", "")
         named_model_kept = True
-        if expected["tier"] == MODEL_NAMED_BY_USER:
+        if expected.get("tier") == MODEL_NAMED_BY_USER:
             del expected["tier"]
             (observed or {}).pop("tier", None)
             named_model_kept = bool(
