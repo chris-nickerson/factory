@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -660,6 +661,31 @@ class RoundsTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("Checks changed", report["error"])
         self.assertEqual(self.git("rev-list", "--count", "trunk..HEAD"), "1")
+
+    def test_checks_cannot_change_bytes_git_normalizes(self):
+        (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
+        self.git("add", ".gitattributes")
+        self.git("commit", "-qm", "Normalize source line endings")
+        before = self.git("rev-parse", "HEAD")
+        convert = shlex.join(
+            [
+                sys.executable,
+                "-c",
+                "from pathlib import Path; p = Path('calc.py'); "
+                "p.write_bytes(p.read_bytes().replace(b'\\n', b'\\r\\n'))",
+            ]
+        )
+        with patch.dict(os.environ, FIXTURE_MODE="noop"):
+            code, report = self.invoke(
+                *self.start, "--rounds", "1", "--check", convert, "--push", "fixture"
+            )
+        self.assertEqual(code, 2, report)
+        self.assertIn("Checks changed", report["error"])
+        self.assertEqual(self.git("diff", "--", "calc.py"), "")
+        self.assertIn(b"\r\n", (self.repo / "calc.py").read_bytes())
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
 
     def test_scope_and_dirty_tree_preserve_work(self):
         with patch.dict(os.environ, FIXTURE_MODE="outside"):

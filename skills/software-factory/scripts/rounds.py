@@ -26,6 +26,7 @@ from checkpoints import (
 from harness import run_turn
 from supervision import captured_check, turn_stopped
 from workspace import (
+    snapshot,
     state_root,
     workspace_lock,
     write_json as save,
@@ -287,6 +288,7 @@ def consume_call(run, record, folder, recover):
 
 def check_candidate(run, record, folder):
     before, _ = candidate(run, folder)
+    working_inputs = snapshot(run["repo"], follow_symlinks=False)
     record["checks"] = []
     n = uuid.uuid4().hex[:10]
     attempt = {"tree": before, "checks": record["checks"]}
@@ -313,6 +315,10 @@ def check_candidate(run, record, folder):
         if before != after or rev(run["repo"], "HEAD") != record["input"]:
             raise Pending(
                 "Checks changed the candidate or its revision. Inspect the changes and resume."
+            )
+        if snapshot(run["repo"], follow_symlinks=False) != working_inputs:
+            raise Pending(
+                "Checks changed the working inputs. Inspect the changes and resume."
             )
     record.update(tree=before, phase="assess")
     save(folder / "state.json", run)

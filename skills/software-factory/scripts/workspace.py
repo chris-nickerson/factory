@@ -176,7 +176,7 @@ def installed_skill_release(link, destination):
     return f"{content}:{modes}"
 
 
-def snapshot(repo, *, plain_directory=False):
+def snapshot(repo, *, plain_directory=False, follow_symlinks=True):
     """Hash Git's source set, index and HEAD, or all files in a plain directory."""
     repo = Path(repo).resolve()
     digest = hashlib.sha256()
@@ -230,6 +230,8 @@ def snapshot(repo, *, plain_directory=False):
         field(str(mode).encode())
         if stat.S_ISLNK(mode):
             field(os.fsencode(os.readlink(p)))
+            if not follow_symlinks:
+                continue
             try:
                 dest = p.resolve(strict=True)
             except FileNotFoundError:
@@ -255,7 +257,13 @@ def snapshot(repo, *, plain_directory=False):
                 )
         elif name in gitlinks and p.is_dir():
             # ls-files in a deinitialized submodule would discover the parent repo.
-            field(snapshot(p, plain_directory=not (p / ".git").exists()).encode())
+            field(
+                snapshot(
+                    p,
+                    plain_directory=not (p / ".git").exists(),
+                    follow_symlinks=follow_symlinks,
+                ).encode()
+            )
         elif stat.S_ISREG(mode):
             with p.open("rb") as stream:
                 field(hashlib.file_digest(stream, "sha256").digest())
