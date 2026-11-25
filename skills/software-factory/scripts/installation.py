@@ -95,6 +95,15 @@ def is_managed_skill_directory(path, current, entry_digest):
     )
 
 
+def skill_transition(path):
+    return path.with_name("." + path.name + ".previous")
+
+
+def discard_skill_transition(path):
+    with tempfile.TemporaryDirectory(prefix=".factory-", dir=path.parent) as temp:
+        path.rename(Path(temp) / "retired")
+
+
 def publish_default_skill(path, current, entry, replace):
     with tempfile.TemporaryDirectory(prefix=".factory-", dir=path.parent) as temp:
         stage = Path(temp) / "skill"
@@ -105,7 +114,7 @@ def publish_default_skill(path, current, entry, replace):
             (stage / "SKILL.md").write_bytes(entry)
             for name, target in skill_links(current).items():
                 (stage / name).symlink_to(target)
-        previous = Path(temp) / "previous"
+        previous = skill_transition(path)
         if replace:
             path.rename(previous)
         try:
@@ -114,6 +123,8 @@ def publish_default_skill(path, current, entry, replace):
             if replace:
                 previous.rename(path)
             raise
+        if replace:
+            discard_skill_transition(previous)
 
 
 def read_installation(manifest, current):
@@ -202,6 +213,23 @@ def install_release(
         raise ValueError(f"Foreign current release: {current}")
     has_entry = False
     for link, target in destinations.items():
+        if link == prefix / "bin/factory":
+            continue
+        previous = skill_transition(link)
+        if not os.path.lexists(previous):
+            continue
+        if link_target(previous) != str(target) and not is_managed_skill_directory(
+            previous, current, registration.get("sha256")
+        ):
+            raise ValueError(f"Another installation owns the pending skill change: {link}")
+        if not dry_run:
+            if not os.path.lexists(link):
+                previous.rename(link)
+            elif link_target(link) == str(target) or is_managed_skill_directory(
+                link, current, registration.get("sha256")
+            ):
+                discard_skill_transition(previous)
+    for link, target in destinations.items():
         if not os.path.lexists(link) or link_target(link) == str(target):
             continue
         if link == default_skill and is_managed_skill_directory(
@@ -243,14 +271,14 @@ def install_release(
         if not saved:
             raise ValueError("Missing installation manifest")
         if has_entry:
-            with tempfile.TemporaryDirectory(
-                prefix=".factory-", dir=default_skill.parent
-            ) as temp:
-                default_skill.rename(Path(temp) / "retired")
+            previous = skill_transition(default_skill)
+            default_skill.rename(previous)
         for link, target in destinations.items():
             if link_target(link) == str(target):
                 link.unlink()
         current.unlink(missing_ok=True)
+        if has_entry:
+            discard_skill_transition(previous)
         manifest.unlink()
         return report
     release.parent.mkdir(parents=True, exist_ok=True)
