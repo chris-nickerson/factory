@@ -2,6 +2,8 @@
 
 Start with the [architecture walkthrough](docs/architecture.md) and its [offline example](docs/architecture.md#try-factory-offline). Run the offline tests from the checkout with `python3 -B -m unittest discover -s tests -v`.
 
+GitHub Actions runs Verify Factory on pull requests, main and tags. To check a branch before opening a PR or while resolving a merge conflict, select the branch under **Actions → Verify Factory → Run workflow**.
+
 For any change to docs, agent instructions, help or comments, use the [Factory writing guide](skills/software-factory/references/documentation.md). Run changed examples and check links. For a comment that explains a workaround, verify its cause before changing the explanation.
 
 - For a procedure that uses existing commands, start in the [skill's routing table](skills/software-factory/SKILL.md) and its linked references. Check a neighboring request that should follow a different route.
