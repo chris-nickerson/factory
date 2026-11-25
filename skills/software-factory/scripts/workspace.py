@@ -235,6 +235,13 @@ def snapshot(repo, *, plain_directory=False, worktree_only=False):
                 field(name)
                 field(b"missing")
             continue
+        if (
+            worktree_only
+            and stat.S_ISDIR(mode)
+            and name not in gitlinks
+            and not os.path.lexists(p / ".git")
+        ):
+            continue
         field(name)
         field(str(mode).encode())
         if stat.S_ISLNK(mode):

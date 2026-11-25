@@ -39,6 +39,10 @@ if fresh and mode == "regression":
     Path("calc.py").write_text("def add(a,b): return a - b\\n")
 if fresh and mode == "outside":
     Path("untouched").write_text("unexpected change")
+if fresh and mode == "replace-file":
+    Path("pkg").unlink()
+    Path("pkg").mkdir()
+    Path("pkg/entry.txt").write_text("ready")
 with log.open("a") as stream:
     print(json.dumps({"session":session,"fresh":fresh,"mode":args[args.index("--permission-mode")+1],"prompt":prompt.decode()}),file=stream)
 print(json.dumps({"subtype":"success","session_id":session,"modelUsage":{"claude-opus-fixture":{}},
@@ -686,6 +690,16 @@ class RoundsTests(unittest.TestCase):
         self.assertEqual(self.git("rev-parse", "HEAD"), before)
         self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
         self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+    def test_checkpoint_accepts_replacing_a_tracked_file_with_a_directory(self):
+        (self.repo / "pkg").write_text("old layout")
+        self.git("add", "pkg")
+        self.git("commit", "-qm", "Record the original layout")
+        with patch.dict(os.environ, FIXTURE_MODE="replace-file"):
+            code, report = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 0, report)
+        self.assertEqual(self.git("show", "HEAD:pkg/entry.txt"), "ready")
+        self.assertEqual(report["rounds"][0]["remote_head"], self.git("rev-parse", "HEAD"))
 
     def test_checks_stop_if_head_moves_before_working_input_snapshot(self):
         self.assert_head_move_blocks_checks(snapshot_number=1, first_runs=False)
