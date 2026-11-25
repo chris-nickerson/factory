@@ -13,6 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 # A request that names a model has no tier to choose. Its role spec is scored.
 MODEL_NAMED_BY_USER = "opus"
 CASES = {
+    "trace": ("I have a CPU profile from the slow export. Identify where the time went using the capture. Keep the service stopped.", "diagnostics", False),
+    "prototype": ("Try both keyboard interactions in a disposable demo and tell me which preserves focus. Leave the application alone.", "prototype", False),
+    "parity": ("Audit the old and new settings screens across the supported themes. I need evidence of any pixel differences before we decide on repairs.", "visual parity", False),
+    "comparison": ("Compare our CLI refactor with its released checkout using the same consumer inputs. Keep the result local.", "behavioral comparison", False),
+    "stack": ("Open the dependent PRs against their parents and hand me the verified stack to land myself.", "stack delivery", True),
     "existing-pr-round-limit": (
         "Use Software Factory to babysit this existing PR for exactly one round and publish its fixes. You fixed failed CI, "
         "pushed the fix and read back the new head, approval, open threads and replacement checks. "
@@ -101,7 +106,7 @@ SCHEMA = {
     "properties": {
         "skill": {"type": "string"},
         "procedure": {
-            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "full delivery", "PR review workflow", "other"],
+            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "full delivery", "PR review workflow", "diagnostics", "prototype", "visual parity", "behavioral comparison", "stack delivery", "other"],
         },
         "publish": {"type": "boolean"},
         "tier": {
