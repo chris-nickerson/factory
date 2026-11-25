@@ -32,7 +32,7 @@ Use the brief to choose a workflow and guide your next actions. Pass the relevan
 
 For a check-only request, run the local checks. If the request requires independent review, include the review step. For verification-only and review-only requests, report the requested results and stop.
 
-If the user withdraws permission to push simplification rounds, stop using the push-enabled run. It keeps its original remote on resume. If the user asks to continue locally, [release any stopped push-enabled run](references/simplify.md#recovery) and start a new run without `--push`.
+If the user only asks you to stop pushing, stop using the push-enabled run and leave its saved state in place. Resuming it would still use the original remote. If the user asks you to continue locally, [release any stopped push-enabled run](references/simplify.md#recovery) and start a new run without `--push`.
 
 For changes to stored data, concurrent writers, replicas, event processing or data-system performance, select a [failure history and consumer observation](references/data-systems.md) when designing or reviewing the contract.
 
