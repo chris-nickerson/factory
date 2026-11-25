@@ -444,9 +444,8 @@ class FactoryTests(unittest.TestCase):
         clone = self.home / "factory-source"
         shutil.copytree(ROOT / "skills", clone / "skills")
         shutil.copy(ROOT / "install.py", clone / "install.py")
-        template = clone / "skills/software-factory/scripts/skill-entry.md"
+        template = clone / "skills/software-factory/SKILL.md"
         entry = template.read_bytes()
-        template.unlink()
         skill = self.home / ".agents/skills/software-factory"
         cli = self.home / ".local/bin/factory"
         cmd = [
@@ -462,9 +461,11 @@ class FactoryTests(unittest.TestCase):
             )
 
         install()
-        self.assertTrue(skill.is_symlink())
+        current = cli.parent.parent / "lib/software-factory/current"
+        shutil.rmtree(skill)
+        skill.symlink_to(current)
         original = cli.resolve()
-        template.write_bytes(entry)
+        template.write_bytes(entry + b"\nNew instructions.\n")
         install("--dry-run")
         self.assertTrue(skill.is_symlink())
         self.assertEqual(cli.resolve(), original)
@@ -472,7 +473,7 @@ class FactoryTests(unittest.TestCase):
         self.assertTrue(skill.is_dir())
         self.assertFalse(skill.is_symlink())
         self.assertFalse((skill / "SKILL.md").is_symlink())
-        self.assertEqual((skill / "SKILL.md").read_bytes(), entry)
+        self.assertEqual((skill / "SKILL.md").read_bytes(), template.read_bytes())
         self.assertNotEqual(cli.resolve(), original)
         self.assertEqual((skill / "scripts/factory").resolve(), cli.resolve())
         self.assertEqual(
@@ -486,7 +487,14 @@ class FactoryTests(unittest.TestCase):
         template.write_bytes(entry + b"\nNext release.\n")
         install()
         self.assertFalse((skill / "SKILL.md").is_symlink())
-        self.assertEqual((skill / "SKILL.md").read_bytes(), entry)
+        self.assertEqual((skill / "SKILL.md").read_bytes(), template.read_bytes())
+        install("--rollback")
+        self.assertEqual((skill / "SKILL.md").read_bytes(), entry + b"\nNew instructions.\n")
+        installed = skill / "SKILL.md"
+        installed.write_text("user edits")
+        self.assertNotEqual(install(check=False).returncode, 0)
+        self.assertEqual(installed.read_text(), "user edits")
+        installed.write_bytes(entry + b"\nNew instructions.\n")
         extra = skill / "user-notes"
         extra.write_text("keep")
         self.assertNotEqual(install("--remove", check=False).returncode, 0)

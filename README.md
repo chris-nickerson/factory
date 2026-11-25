@@ -25,7 +25,7 @@ export PATH="$HOME/.local/bin:$PATH"
 factory doctor
 ```
 
-This installs `factory` in `~/.local/bin` and the skill in `~/.agents/skills/software-factory`. The default skill directory contains a regular `SKILL.md` so agents that skip directory symlinks can discover it. The skill and CLI follow the same active release. Add `~/.local/bin` to your `PATH` in your shell profile so later shells find it.
+This installs `factory` in `~/.local/bin` and the skill in `~/.agents/skills/software-factory`. The default skill directory contains the full instructions in a regular `SKILL.md` so agents that skip directory symlinks can discover and read them. The skill and CLI follow the same active release. Add `~/.local/bin` to your `PATH` in your shell profile so later shells find it.
 
 Run `factory doctor --profile paired` to check the Codex and Claude Code CLIs. If they are unavailable, use the [local evidence workflow](skills/software-factory/references/local.md).
 
@@ -63,7 +63,7 @@ factory update
 
 Factory installs the latest `main` from the repository you installed from and lists the commits it brought in. Pass `--json` for a machine-readable report. To go back, run `python3 install.py --rollback` from your checkout with the original install prefix.
 
-If the default skill directory is still a symlink after updating, run `factory update` again so the new CLI can migrate it. You can also run `python3 install.py` once from an updated checkout. For a legacy install with a custom prefix, migrate from the original home directory so Factory can identify the default skill path. Rolling back to a release that predates this layout restores the symlink.
+If the default skill directory is still a symlink or its entry still points readers to `release/SKILL.md` after updating, run `factory update` again so the new CLI can migrate it. You can also run `python3 install.py` once from an updated checkout. For a legacy install with a custom prefix, migrate from the original home directory so Factory can identify the default skill path. Rolling back to a release that predates this layout restores the symlink.
 
 Keep the installed skill path out of Git's index. If the index tracks an older skill symlink, remove that entry before verifying changes in the checkout.
 

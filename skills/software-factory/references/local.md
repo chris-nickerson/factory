@@ -62,11 +62,14 @@ An oracle is copied into the frozen run contract. Factory executes it in a new P
 
 ```sh
 factory inspect --repo .
-factory start --repo . --task "Fix incorrect addition" --contract /path/to/contract.json --require-review --base HEAD
-factory check RUN_ID
-factory review RUN_ID
-factory status RUN_ID
+run=$(factory start --repo . --task "Fix incorrect addition" --require-review --base HEAD \
+  --contract /path/to/contract.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"])')
+factory check "$run"
+factory review "$run"
+factory status "$run"
 ```
+
+The `run` field identifies the run for later commands. The `--timeout` option on `factory check` limits each contract command. If your host limits how long it waits for a shell call, start the check in a persistent background session and collect its output and exit status from that session.
 
 A run tracks the whole Git source set, including staged content, unstaged changes and unignored new files. In plain folders it hashes the whole tree. Put generated outputs in the repository's established ignored directories or outside it. A check that changes the subject cannot establish a pass. Receipts persist under `FACTORY_STATE_DIR` or the user's XDG state directory. One local Factory operation locks a workspace at a time. Other applications can still write to it.
 
