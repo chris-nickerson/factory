@@ -1,6 +1,6 @@
 # Contribute to Software Factory
 
-Start with the [offline demo](README.md#see-evidence-go-stale) and [architecture walkthrough](docs/architecture.md). Run the offline tests from the checkout with `python3 -B -m unittest discover -s tests -v`.
+Start with the [architecture walkthrough](docs/architecture.md) and its [offline example](docs/architecture.md#try-factory-offline). Run the offline tests from the checkout with `python3 -B -m unittest discover -s tests -v`.
 
 For any change to docs, agent instructions, help or comments, use the [Factory writing guide](skills/software-factory/references/documentation.md). Run changed examples and check links. For a comment that explains a workaround, verify its cause before changing the explanation.
 

@@ -238,8 +238,9 @@ def run_turn(
     The caller coordinates writes to the workspace. Claude's restricted profile
     exposes worktree file tools and can enable sandboxed Bash for Auto edits.
     Codex accepts read-only tasks through this adapter. Use a new output directory
-    outside the target workspace for each attempt. Successful Codex receipts
-    record `model_reported` as null.
+    outside the target workspace for each attempt. Codex JSON events do not
+    currently report the resolved model, so Codex receipts record
+    `model_reported` as null.
     """
     if provider not in ("codex", "claude") or (edit and provider != "claude"):
         raise HarnessError("Unsupported provider or edit mode")
