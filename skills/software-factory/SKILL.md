@@ -18,7 +18,7 @@ On hosts without the provider CLIs, use `factory doctor --profile local` and the
 | Implement, verify, refactor, measure performance, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
 | Write or revise a PR description | Use the [PR writing guide](references/pr-descriptions.md) and the target repository's template. |
 | Write, revise or clean up documentation | Use the [documentation guide](references/documentation.md). |
-| Prepare a PR for review or babysit one | Use the [PR review workflow](references/delivery.md#pr-review-workflow), including on hosts without a babysit skill. |
+| Prepare a PR for review or babysit one | Use the [PR review workflow](references/delivery.md#pr-review-workflow). |
 | Attach a real-world correction to a prior run | Use `factory outcome` with the relevant run and observed behavior. [Later outcomes](references/local.md#later-outcomes) |
 | Deliver an implementation with GPT and Opus | Compose consensus if requested, GPT implementation, the size-based Opus rounds, a fresh GPT review and final behavioral checks. [Delivery and continuation](references/delivery.md) |
 
