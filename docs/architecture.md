@@ -1,6 +1,6 @@
 # How Factory works
 
-Factory runs on the developer's machine. The target repository keeps its own instructions, checks and launch tools. Factory carries only the procedures that transfer between projects, so a maintainer never has to keep a second copy of the project's knowledge in sync. The agent chooses what would demonstrate the requested behavior. Factory freezes that decision and records what happened when the check ran.
+Factory runs on the developer's machine. The target repository owns its instructions, checks and launch tools. The agent reads those instructions and chooses checks that demonstrate the requested behavior. Factory saves those checks as a contract and records what happened when they ran.
 
 ## Follow one check
 
@@ -10,6 +10,28 @@ Factory runs on the developer's machine. The target repository keeps its own ins
 4. **Read back.** `factory status` compares the latest attempt for each claim to the current subject and checks the stored log digest. When a review is required, its report must also match the subject. A later outcome is a separate observation about that revision. [Behavioral tests](../tests/test_evidence.py)
 
 In Git, the fingerprint includes HEAD, the index, tracked working files and unignored new files. A staged change still matters if an unstaged edit reverses it. A plain directory uses its filesystem contents. The journal and its digests share the local account's trust boundary. A check can also depend on ignored files, executables from PATH, or a script referenced by `argv`. For a service check, observe which build or account actually answered. [Consumer check guidance](../skills/software-factory/references/local.md#when-a-model-controls-the-outcome)
+
+## Try Factory offline
+
+Run this example offline from the Factory checkout. You need Git and Python, and you can use the checkout's `./factory` directly. The example creates a temporary project, checks its file, then edits the file so you can see what happens to the earlier result.
+
+```sh
+demo=$(mktemp -d)
+mkdir "$demo/project"
+printf 'ready\n' > "$demo/project/answer.txt"
+cat > "$demo/contract.json" <<'JSON'
+[{"id":"ready","expect":"answer.txt contains the line ready","argv":["grep","-Fx","ready","answer.txt"]}]
+JSON
+
+run=$(./factory start --repo "$demo/project" --task "Verify readiness" \
+  --contract "$demo/contract.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"])')
+./factory check "$run"                  # VERIFIED
+printf 'pending\n' > "$demo/project/answer.txt"
+./factory status "$run"                 # INCOMPLETE, claim STALE (exit 2)
+./factory check "$run"                  # FAILED, claim FAIL (exit 1)
+```
+
+After you edit `answer.txt`, `./factory status "$run"` reports the earlier check result as `STALE` without rerunning the check. Run `./factory check "$run"` to check the current file. In this example, the new check fails because the file now says `pending`.
 
 ## Reach agreement between two models
 
@@ -36,7 +58,11 @@ The coordinator pins the task, base, permitted paths, checks and number of round
 
 The assessment resumes the editing session with read-only tools. A failing check requires repair even if the model accepts its work. A round can keep the code as it stands, and the selected number of rounds still runs. [Round coordinator](../skills/software-factory/scripts/rounds.py) · [Provider adapter](../skills/software-factory/scripts/harness.py)
 
-The coordinator journals each phase before contacting a provider, and the harness records the request and session. Recovery uses those records to reconcile an interrupted call. Factory compares the working inputs around each check, before assessment, before creating a commit, and before confirming the checkpoint. A rewrite hidden by Git normalization still blocks the round. The comparison uses existing working files and records symlinks as links. Staging a candidate can change Git's index even when the working inputs stay the same. Factory computes the candidate tree separately with a temporary index and compares it with the tree that gets committed. Older rounds without a saved input fingerprint still use the Git tree check. If the process dies between a commit and its receipt, recovery checks the parent, tree, branch and commit identity. With publication enabled, Factory binds the destination, checks the expected remote head and reads it back after pushing. The explicit lease protects an independently moved remote. [Git checkpoints](../skills/software-factory/scripts/checkpoints.py) · [Recovery and publication tests](../tests/test_rounds.py)
+**Provider calls.** The coordinator records each phase before contacting a provider. The harness records the request and session. On resume, Factory uses those records to determine what happened to an interrupted call.
+
+**Working files and Git trees.** Factory compares the working files before and after each check, before assessment, before committing and before confirming the checkpoint. The comparison uses the bytes on disk and treats symlinks as links. It can detect changes that Git normalization would hide. Staging can change the index while the working files stay the same, so Factory uses a temporary index to compute the expected tree and compares it with the committed tree. Older rounds without a saved fingerprint of the working files still use the Git tree check.
+
+**Commit recovery and publication.** If Factory stops after a commit but before saving its receipt, it checks the parent, tree, branch and commit identity on resume. When the user requests publication, Factory records the push destination, verifies the expected remote head and reads it back after pushing. The explicit lease protects a remote branch that moved independently. [Git checkpoints](../skills/software-factory/scripts/checkpoints.py) · [Recovery and publication tests](../tests/test_rounds.py)
 
 ## Boundaries and tradeoffs
 

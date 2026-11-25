@@ -6,7 +6,7 @@ Read the request, the final diff against the intended base, the check results an
 
 **Lead with the consequence.** Name who encountered the problem and under what conditions. Say what happens now. Explain the reason for a design choice when the diff alone cannot show it. For internal work, name the developer or system that benefits. Put any required action or breaking change near the top. A small change can fit in one paragraph.
 
-**Use ordinary engineering language.** Write short, complete sentences. Give each action a subject, use an active verb, and use the same term for the same thing. Keep exact names that a reader will see in code or on screen. Explain unfamiliar terms on first use. Words like “when” and “because” earn their place when they connect the cause to the result. Replace “hardens the export path” with the behavior a reader could observe.
+**Use ordinary engineering language.** Follow the [Factory writing guide](documentation.md#write-in-plain-technical-english). Replace “hardens the export path” with the behavior a reader could observe.
 
 **Show how you know.** Give the most relevant observation and link to the evidence when available. Describe the result in product terms (“the exporter wrote five rows”). A test can pass, fail or check that result. Attribute supplied results to the test run. Say “I ran” only for checks you personally performed. Group checks that support the same claim. Say which material cases remain untested.
 

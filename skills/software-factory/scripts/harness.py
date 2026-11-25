@@ -233,12 +233,13 @@ def run_turn(
     local_shell=False,
     output_dir,
 ):
-    """Start a fresh session or resume its exact ID; return the persisted receipt.
+    """Start or resume the specified session and return its saved receipt.
 
-    The requester owns workspace write coordination. Claude's restricted mode
+    The caller coordinates writes to the workspace. Claude's restricted profile
     exposes worktree file tools and can enable sandboxed Bash for Auto edits.
-    Codex accepts read-only tasks here. Keep output directories outside the target and use a new one for
-    every attempt. Codex JSON events do not currently report a resolved model.
+    Codex accepts read-only tasks through this adapter. Use a new output directory
+    outside the target workspace for each attempt. Successful Codex receipts
+    record `model_reported` as null.
     """
     if provider not in ("codex", "claude") or (edit and provider != "claude"):
         raise HarnessError("Unsupported provider or edit mode")

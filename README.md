@@ -1,21 +1,24 @@
 # Software Factory
 
-Factory is an agent skill and a local command-line tool for engineering work you can check. You ask your coding agent for something in plain language. The skill picks a procedure, and the `factory` command records the result of a frozen check against a fingerprint of the workspace. The check, execution environment, and saved records rely on the trust you place in the local account.
+I want coding agents to understand a problem before they change code, make the smallest change that holds up, and give me enough evidence to decide what to do next. Sometimes that means shipping a small fix. Sometimes it means finding the missing evidence, simplifying a design, or leaving the code alone. I’m building Software Factory to grow into a way of working across the whole engineering task, from the first question through the pull request.
+
+Today, Factory is an installable agent skill and a local CLI. The skill reads your request, chooses a workflow, and carries your constraints through the work using the repository’s own instructions and tools. The CLI runs checks, saves what happened, and coordinates separate model sessions when a workflow calls for them.
 
 ## What you can ask for
 
-- **Fix a bug or build a change.** The agent writes down the expected behavior before it edits, reproduces the failure, then shows the same check passing on the final code. If the workspace fingerprint changes after a check, the evidence goes stale.
-- **Get a second opinion.** GPT and Claude Opus work through a design or a diagnosis independently, then argue until they agree on one proposal or agree that the evidence is missing.
-- **Simplify a branch.** One to three fresh Opus sessions reconsider the change from first principles. Factory checks and commits each round.
-- **Upgrade a dependency or clear a scanner alert.** The agent traces the resolved package and checks the code that actually uses it.
-- **Ship a pull request.** The agent writes the description, watches CI and reviews, and fixes what is real.
-- **Keep documentation honest.** The agent removes what has gone stale and documents only what stays true.
-
-Factory is not tied to one kind of project. It reads each repository's own instructions and test commands instead of bringing its own.
+| If you need to | Ask Factory to |
+| --- | --- |
+| Fix a bug or build a change | Confirm the behavior through a real entry point, make the change, and show what happens afterward. |
+| Decide between designs or diagnose a hard problem | Have Codex and Claude Opus investigate independently, then compare the evidence behind their conclusions. |
+| Simplify a branch | Give fresh Opus sessions the branch, its constraints, and the checks it must pass. |
+| Upgrade a dependency or clear a scanner alert | Find which version the project actually installs and check the code that uses it. |
+| Review a change | Have a fresh Codex session review the scoped diff and back each finding with the case that triggers it. |
+| Prepare a pull request | Explain the change, follow CI and review feedback, and fix confirmed issues. |
+| Improve documentation | Check what the project does and write instructions someone can follow without reading the ticket. |
 
 ## Install
 
-You need macOS or Linux, Git and Python 3.11 or later.
+You need macOS or Linux, Git, and Python 3.11 or later.
 
 ```sh
 git clone https://github.com/chris-nickerson/factory.git
@@ -25,35 +28,17 @@ export PATH="$HOME/.local/bin:$PATH"
 factory doctor
 ```
 
-This installs `factory` in `~/.local/bin` and the skill in `~/.agents/skills/software-factory`. The default skill directory contains the full instructions in a regular `SKILL.md` so agents that skip directory symlinks can discover and read them. Add `~/.local/bin` to your `PATH` in your shell profile so later shells find it.
+The installer puts the CLI in `~/.local/bin` and the skill in `~/.agents/skills/software-factory`. The skill includes a regular `SKILL.md` for hosts that skip directory symlinks. To keep the CLI available in new shells, add `~/.local/bin` to your shell’s `PATH`.
 
-Run `factory doctor --profile paired` to check the Codex and Claude Code CLIs. If they are unavailable, use the [local evidence workflow](skills/software-factory/references/local.md).
+### Try it on a real task
 
-Open a repository in a new agent session and try:
+Open one of your repositories in a new coding-agent session, then ask for the outcome you want.
 
-> Use Software Factory to reproduce this bug, fix it, and verify it through the public entry point.
+> Use Software Factory to reproduce this bug, fix it, and verify it through the public entry point. Keep the change local.
 
-## See evidence go stale
+> Use Software Factory to get a second diagnosis from Opus. Stay read-only and tell me what observation would settle the disagreement.
 
-This example runs offline from a checkout, without installing anything or signing in to a model. It checks one claim, changes the code under it, then asks Factory what it knows.
-
-```sh
-demo=$(mktemp -d)
-mkdir "$demo/project"
-printf 'ready\n' > "$demo/project/answer.txt"
-cat > "$demo/contract.json" <<'JSON'
-[{"id":"ready","expect":"answer.txt contains the line ready","argv":["grep","-Fx","ready","answer.txt"]}]
-JSON
-
-run=$(./factory start --repo "$demo/project" --task "Verify readiness" \
-  --contract "$demo/contract.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"])')
-./factory check "$run"                  # VERIFIED
-printf 'pending\n' > "$demo/project/answer.txt"
-./factory status "$run"                 # INCOMPLETE, claim STALE (exit 2)
-./factory check "$run"                  # FAILED, claim FAIL (exit 1)
-```
-
-`status` notices the edit without rerunning the check. The second `check` makes a new observation, and this time it fails.
+Independent review requires Codex. Simplification requires Claude Code. A two-model design or diagnosis requires both. Run `factory doctor --profile paired` to check their availability, or use the [local workflow](skills/software-factory/references/local.md) to run checks without them.
 
 ## Update
 
@@ -61,29 +46,38 @@ printf 'pending\n' > "$demo/project/answer.txt"
 factory update
 ```
 
-Factory installs the latest `main` from the repository you installed from. It lists the incoming commits when it knows the previous source commit and the fetched history covers the range. Pass `--json` for a machine-readable report. To go back, run `python3 install.py --rollback` from an up-to-date checkout with the original install prefix.
+Factory installs the latest `main` from the repository you installed from. It shows incoming commits when the prior source commit and intervening history are available. Use `--json` for a machine-readable report. To roll back, run `python3 install.py --rollback` from an up-to-date checkout with the original install prefix.
 
-The CLI and skill files agree after a completed update or rollback. During the switch, a reader can see files from different releases. Let the command finish before starting a new agent session. If the command is interrupted, rerun it to finish the switch.
+Let the command finish before opening a new agent session. During the switch, the CLI and skill files can come from different releases. If the command stops partway through, rerun it to finish the switch.
 
-If the default skill directory is still a symlink or its entry still points readers to `release/SKILL.md` after updating, run `factory update` again so the new CLI can migrate it. You can also run `python3 install.py` once from an updated checkout. For a legacy install with a custom prefix, migrate from the original home directory so Factory can identify the default skill path. Rolling back to a release that predates this layout restores the symlink.
+<details>
+<summary>Older installs and local run records</summary>
 
-Keep the installed skill path out of Git's index. If the index tracks an older skill symlink, remove that entry before verifying changes in the checkout.
+If the default skill directory is still a symlink or its entry points to `release/SKILL.md` after updating, rerun `factory update` or run `python3 install.py` from an updated checkout. If you installed with a custom prefix, migrate from the original home directory so Factory can find the default skill path. Rolling back to a release that predates this layout restores the symlink.
 
-Factory keeps run records outside your project, in `~/.local/state/software-factory` by default. Set `FACTORY_STATE_DIR` to move them. Use the same state directory for all Factory invocations on one worktree so they share its lock and pending-run ownership. The records can include source code and command output.
+Keep the installed skill path out of Git’s index. If the index tracks an older symlink at that path, remove the index entry before verifying changes in the checkout.
+
+Factory saves run records outside your project in `~/.local/state/software-factory` by default. Set `FACTORY_STATE_DIR` to change the location. Use the same state directory for every Factory command on a worktree so the commands share its lock and know which run owns it. Records can include source code and command output. The checks and saved records rely on the local account that runs them.
+
+</details>
 
 ## Learn more
 
-- [How Factory works](docs/architecture.md) follows one check, one model debate and one simplification round through the code.
-- [The skill](skills/software-factory/SKILL.md) is what agents read. It maps each kind of request to a procedure.
-- `factory --help` lists every command and option.
+- [The skill](skills/software-factory/SKILL.md) shows how Factory chooses a procedure and what each procedure allows.
+- [How Factory works](docs/architecture.md) follows a local check, an independent model discussion, and a simplification round.
+- `factory --help` lists the commands and options.
+
+## See evidence go stale
+
+[Try Factory offline](docs/architecture.md#try-factory-offline) to see what happens to an earlier check result after the source changes. The example runs from a checkout with Git and Python and needs no model login.
 
 ## Work on Factory
+
+Use the [contributor guide](CONTRIBUTING.md) to find where a change belongs and how to verify it. Run the offline suite from the checkout.
 
 ```sh
 python3 -B -m unittest discover -s tests -v
 ```
-
-The tests use real Git repositories, bare remotes and subprocesses. They run offline. The scripts in `evals/` exercise live model sessions or a browser with checks outside the edited checkout. See the [contributor guide](CONTRIBUTING.md) for where to make changes and how to verify them.
 
 ## License
 

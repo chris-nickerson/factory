@@ -4,14 +4,14 @@ Choose the round count using the PR tiers in SKILL.md. Existing invocations with
 
 Start on a clean, committed, named work branch, preferably a dedicated worktree. Factory computes a common base, takes ownership for the run, and allows edits to paths in the starting branch delta. Add an explicitly relevant file or subtree with `--allow PATH` when simplifying across module boundaries. Keep the state directory outside the checkout. Git index entries marked assume-unchanged or skip-worktree can hide checked-out bytes, so this route requires visible index entries and clean initialized submodules. It reports these conditions without modifying the index or submodule. The coordinator can inspect Git-visible changes. Host file permissions and the operator's isolated worktree govern access to other files.
 
-For the requested push-each-round procedure, select the actual work-branch remote. The following example assumes a Python project using a `trunk` base and an `origin` remote.
+If the user asks to push each round, pass `--push REMOTE` with the work branch's remote. For local work, omit `--push`. This example uses a Python project, a `trunk` base and the `origin` remote.
 
 ```sh
 factory simplify --repo . --base trunk --rounds 2 --task 'Preserve the parser contract and existing error messages.' \
   --check 'python3 -m unittest discover -s tests' --push origin
 ```
 
-Each `--check` is one argument vector with shell-style quoting. To invoke a project script, pass its executable and arguments. Repeat the option to add another check. Use `--commit-subject TEXT` for a repository-required checkpoint title. Factory passes that title as a single line and records the checked revision in its run receipt. For local-only work, omit `--push`. Use `--timeout SECONDS` to change the limit for each verification command. Opus editing, assessment and repair turns have no Factory time limit.
+Pass one command and its arguments per `--check`, using shell-style quoting. Repeat the option for each additional check. If the repository requires a checkpoint title, pass one line with `--commit-subject TEXT`. Factory records the checked revision in its run receipt. Use `--timeout SECONDS` to set the limit for each verification command. Opus editing, assessment and repair turns have no Factory time limit.
 
 The first message of each fresh session comes from the [canonical prompt](reconsider-from-first-principles.v1.txt). The runner supplies the requirements, edit scope and branch evidence separately. New editing and repair turns use Claude Code Auto with file tools and sandboxed Bash for local tests. Auto evaluates shell requests. Factory runs its own checks and owns Git commits and pushes. Each assessment resumes the same session with read-only file tools. Runs started with the earlier file-only profile retain that profile on resume. Auto shell requires a working Claude Code sandbox on the host. Factory returns actual check output to the same session for assessment. A failed check forces repair even when the model claims success. A round can attempt two repairs before stopping with its artifacts intact.
 
@@ -26,7 +26,14 @@ factory simplify --resume RUN_ID --status
 factory simplify --resume RUN_ID
 ```
 
-To set a compliant title on an existing run before it commits, including after a commit hook rejects the title, retry with `--resume RUN_ID --recover --commit-subject TEXT`. The new title applies to the waiting checkpoint and later rounds. If Factory stopped after Git committed and the message has no run marker, inspect the local commit and resume with `--accept-checkpoint FULL_SHA` to accept that exact commit. Its parent, tree, branch and clean worktree must still match the checked round. Resume reconciles successful calls, committed trees and lost remote receipts before launching another turn. If a provider call failed, inspect its receipt, the worktree, and any active process. After resolving an authentication or environment failure, or preserving any partial edits from a failed first call and restoring its clean input, use `factory simplify --resume RUN_ID --recover`. A surviving writer or independently moved branch requires reconciliation. To retire a stopped run while preserving its worktree, use `--release` with the run ID. Use the same state directory for all invocations.
+Use the same state directory for every command. Before launching another turn, resume checks for successful provider calls, existing commits and pushes whose receipts were lost.
+
+| Situation | What to do |
+| --- | --- |
+| Before Git created the commit, for example after a hook rejected its title | Retry with `--resume RUN_ID --recover --commit-subject TEXT`. The new title applies to this checkpoint and later rounds. |
+| After Git created a commit whose message has no run marker | Inspect the local commit. To accept that exact commit on resume, pass `--accept-checkpoint FULL_SHA`. Its parent, tree, branch and clean worktree must match the checked round. |
+| During a provider call | Inspect its receipt, the worktree and any active process. Fix login or environment problems. If the first call left partial edits, save them and restore the clean input. Resolve any surviving writer or independently moved branch. Retry with `factory simplify --resume RUN_ID --recover`. |
+| You want to retire the stopped run | Use `--release` with the run ID to preserve the worktree and release the run. |
 
 Logs can contain source and command output. The default location is private local Factory state. The check result applies to the named commands, inputs and revision. A simplification pass alone supplies no evidence for an unexercised behavior.
 

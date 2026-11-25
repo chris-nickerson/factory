@@ -1,6 +1,6 @@
 # Hill-climbing
 
-Use this when the task calls for repeated changes to a measurable outcome. For a single comparison, use the [baseline guidance](local.md#choose-the-baseline).
+Use this workflow to improve a measurable outcome through repeated trials. For a single comparison, use the [baseline guidance](local.md#choose-the-baseline).
 
 1. **Define a win.** Name the outcome someone experiences, the population, the unit and direction of improvement. Set the smallest gain worth keeping, what must stay within bounds (such as correctness or cost per completed task), and the available trials, time or spend. Use the project's own runner. Freeze the metric, workload and guardrails in a [Factory contract](local.md). Reuse checked-in fixtures. Keep generated results and trial notes outside the checkout, and keep confirmation inputs and labels out of the tuning agent’s context.
 2. **Check the measurement.** Run the current version on representative cases. Count failures and retries, and check what the denominator leaves out. Inspect examples the grader accepts and rejects against the actual outcome. Repeat noisy measurements in comparable conditions. If a label, grader or instrument is wrong, correct it and measure the baseline again under a new contract. A broken measurement cannot select a winner.
