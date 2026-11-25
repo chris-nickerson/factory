@@ -61,7 +61,7 @@ printf 'pending\n' > "$demo/project/answer.txt"
 factory update
 ```
 
-Factory installs the latest `main` from the repository you installed from. It lists the incoming commits when it knows the previous source commit and the fetched history covers the range. Pass `--json` for a machine-readable report. To go back, run `python3 install.py --rollback` from your checkout with the original install prefix.
+Factory installs the latest `main` from the repository you installed from. It lists the incoming commits when it knows the previous source commit and the fetched history covers the range. Pass `--json` for a machine-readable report. To go back, run `python3 install.py --rollback` from an up-to-date checkout with the original install prefix.
 
 The CLI and skill files agree after a completed update or rollback. During the switch, a reader can see files from different releases. Let the command finish before starting a new agent session. If the command is interrupted, rerun it to finish the switch.
 
@@ -84,3 +84,7 @@ python3 -B -m unittest discover -s tests -v
 ```
 
 The tests use real Git repositories, bare remotes and subprocesses. They run offline. The scripts in `evals/` exercise live model sessions or a browser with checks outside the edited checkout. See the [contributor guide](CONTRIBUTING.md) for where to make changes and how to verify them.
+
+## License
+
+Software Factory is available under the [MIT License](LICENSE). See the [security policy](SECURITY.md) to report a vulnerability privately.

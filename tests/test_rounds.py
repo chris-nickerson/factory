@@ -687,6 +687,30 @@ class RoundsTests(unittest.TestCase):
         self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
         self.assertEqual(len(self.turns.read_text().splitlines()), 1)
 
+    def test_checks_stop_if_head_moves_before_working_input_snapshot(self):
+        later = self.folder / "later-check-ran"
+        snapshot = rounds.snapshot
+        head_moved = False
+
+        def move_head_before_snapshot(*args, **kwargs):
+            nonlocal head_moved
+            if not head_moved:
+                self.git("commit", "--allow-empty", "-qm", "Independent same-tree commit")
+                head_moved = True
+            return snapshot(*args, **kwargs)
+
+        with (
+            patch.dict(os.environ, FIXTURE_MODE="noop"),
+            patch.object(rounds, "snapshot", side_effect=move_head_before_snapshot),
+        ):
+            code, report = self.invoke(
+                *self.start, "--rounds", "1", "--check", shlex.join(["touch", str(later)])
+            )
+        self.assertEqual(code, 2, report)
+        self.assertIn("candidate or its revision", report["error"])
+        self.assertFalse(later.exists())
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
     def test_scope_and_dirty_tree_preserve_work(self):
         with patch.dict(os.environ, FIXTURE_MODE="outside"):
             code, result = self.invoke(*self.start)
