@@ -177,7 +177,10 @@ def installed_skill_release(link, destination):
 
 
 def snapshot(repo, *, plain_directory=False, follow_symlinks=True):
-    """Hash Git's source set, index and HEAD, or all files in a plain directory."""
+    """Hash Git's source set, index and HEAD, or all files in a plain directory.
+
+    Without follow_symlinks, a link contributes only its target path.
+    """
     repo = Path(repo).resolve()
     digest = hashlib.sha256()
 
