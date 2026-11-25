@@ -173,6 +173,11 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(unrequested["model_identity"], "unrequested")
         self.assertEqual(unrequested["model_reported"], "claude-opus-fixture")
         self.assertNotIn("--model", self.observed()["argv"])
+        with (
+            patch.dict(os.environ, {"HARNESS_CASE": "model"}),
+            self.assertRaisesRegex(HarnessError, "not the requested"),
+        ):
+            self.turn(model="claude-sonnet-fixtur")
         with patch.dict(os.environ, {"HARNESS_CASE": "helper"}):
             self.assertEqual(self.turn()["model_identity"], "indeterminate")
         silent = self.turn("codex", model="gpt-fixture")
@@ -206,6 +211,17 @@ class HarnessTests(unittest.TestCase):
         argv = self.observed()["argv"]
         self.assertEqual(argv[argv.index("--sandbox") + 1], "read-only")
         self.assertFalse(any("workspace_write" in arg for arg in argv))
+
+    def test_codex_reads_instructions_too_long_for_an_argument_from_their_file(self):
+        self.turn("codex", context="short instructions")
+        self.assertIn("short instructions", " ".join(self.observed()["argv"]))
+        long_context = "branch delta line\n" * 20_000
+        self.turn("codex", context=long_context)
+        argv = self.observed()["argv"]
+        self.assertLess(max(map(len, argv)), 60_000)
+        instructions = next(arg for arg in argv if "developer_instructions" in arg)
+        self.assertIn(str(self.output.resolve() / "context.txt"), instructions)
+        self.assertEqual((self.output / "context.txt").read_text(), long_context)
 
     def test_turn_needs_a_harness_that_declares_it(self):
         for kwargs, missing in (

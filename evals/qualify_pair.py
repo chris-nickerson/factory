@@ -17,7 +17,7 @@ FACTORY = str(Path(__file__).resolve().parents[1] / "factory")
 REQUIREMENT = "Preserve price and total for integer cents and finite iterables of integer cents. Keep the existing rounding rule, iteration order, and ValueError message for negative input."
 
 
-def check_auto_shell(out):
+def check_auto_shell(out, model):
     """Measure the interpreter environment inside a real Claude Code Bash child."""
     sys.path.insert(0, str(Path(FACTORY).resolve().parent))
     from harness import run_turn
@@ -35,7 +35,7 @@ def check_auto_shell(out):
     control = os.urandom(8).hex()
     with patch.dict(os.environ, PYTHONDONTWRITEBYTECODE="0", FACTORY_PROBE_CONTROL=control):
         run_turn(
-            "claude", model="opus", repo=repo, edit=True, local_shell=True,
+            "claude", model=model, repo=repo, edit=True, local_shell=True,
             output_dir=out / "shell-probe-call",
             prompt="Use Bash to run exactly python3 check.py once in this directory. "
                    "Leave files and environment settings as supplied. Report the result.",
@@ -165,7 +165,7 @@ def main():
         "fixture",
     )
     if result["simplifier"]["harness"] == "claude":
-        check_auto_shell(out)
+        check_auto_shell(out, result["simplifier"]["model"])
     rounds = result["rounds"]
     head = git("rev-parse", "HEAD")
     if (

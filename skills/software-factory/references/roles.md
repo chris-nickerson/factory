@@ -38,7 +38,7 @@ A spec has three forms:
 
 | Spec | Meaning |
 | --- | --- |
-| `HARNESS` | Use this harness with the role's default tier. |
+| `HARNESS` | Use this harness. The model comes from a lower-priority setting written for the same harness, or else from the role's default tier. |
 | `HARNESS:MODEL` | Use this harness and this model. |
 | `:MODEL` | Keep the harness Factory resolved and change only the model. |
 
@@ -115,6 +115,7 @@ With one harness, Factory still fills every role. It states what the result is w
 | Statement | What it means |
 | --- | --- |
 | The reviewer shares a vendor with the writer | The review comes from a fresh session of a related model. It is less independent than a review from another vendor. |
+| The reviewer's independence is unverified | Only one vendor's harness is available, and Factory could not tell who wrote the change. |
 | Same-model consensus | Both participants use one harness and model. Agreement shows consistency between two sessions. |
 | Same-harness consensus, model diversity unverified | Both participants use one harness that does not report its model. |
 | Both consensus participants come from one vendor | The participants use different models from the same vendor. |

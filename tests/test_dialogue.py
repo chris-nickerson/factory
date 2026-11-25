@@ -287,6 +287,9 @@ class DialogueTests(unittest.TestCase):
         self.assertNotIn("expires", meta)
         self.assertNotIn("timeout", meta)
         meta.update(version=1, expires=1, timeout=150)
+        meta["models"] = {
+            slot: binding["model"] for slot, binding in meta.pop("participants").items()
+        }
         path.write_text(json.dumps(meta))
         self.script = [OPEN, PROPOSE_B, ACCEPT_B]
         code, resumed = self.invoke("resume", out["run"])

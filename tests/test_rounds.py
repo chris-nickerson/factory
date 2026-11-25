@@ -97,6 +97,7 @@ class RoundsTests(unittest.TestCase):
             os.environ,
             PATH=str(self.folder) + os.pathsep + os.environ["PATH"],
             FACTORY_STATE_DIR=str(self.folder / "state"),
+            XDG_CONFIG_HOME=str(self.folder / "config"),
             FIXTURE_TURNS=str(self.turns),
             FIXTURE_MODE="edits",
         )
@@ -426,6 +427,7 @@ class RoundsTests(unittest.TestCase):
         saved = rounds.work_root() / result["run"] / "state.json"
         data = json.loads(saved.read_text())
         data["profile"] = rounds.LEGACY_PROFILE
+        del data["simplifier"]
         rounds.save(saved, data)
         code, complete = self.invoke("--resume", result["run"], "--recover")
         self.assertEqual(code, 0, complete)

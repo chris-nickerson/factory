@@ -79,6 +79,17 @@ class RoleTests(unittest.TestCase):
                 self.assertEqual((first[0], first[2], second[0]), (name, [], name))
                 self.assertTrue(second[2][0].startswith(label))
 
+    def test_one_vendor_and_an_unknown_writer_leave_independence_unverified(self):
+        use_machine(self, "codex")
+        self.assertIn("unverified", self.reviewer()["reductions"][0])
+        use_machine(self, "codex", "claude")
+        self.assertEqual(self.reviewer()["reductions"], [])
+
+    def test_unreadable_project_file_cannot_stop_a_run(self):
+        use_machine(self, "codex")
+        (self.repo / roles.PROJECT_FILE).write_bytes(b"[roles]\nreviewer = \"\xff\"\n")
+        self.assertEqual(self.reviewer()["harness"], "codex")
+
     def test_no_harness_leaves_a_role_unfilled_with_a_next_step(self):
         use_machine(self)
         with self.assertRaisesRegex(roles.RoleError, "factory doctor"):

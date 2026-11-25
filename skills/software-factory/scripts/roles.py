@@ -92,7 +92,7 @@ def _tables(path, keys=("roles", "models")):
         data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
-    except (OSError, tomllib.TOMLDecodeError) as error:
+    except (OSError, ValueError) as error:
         raise RoleError(f"Cannot read role configuration {path}: {error}") from error
     tables = {key: data[key] for key in keys if key in data}
     try:
@@ -385,6 +385,13 @@ def reviewer(policy, *, explicit=None, writer=None):
             f"The reviewer shares a vendor with {writer['description']}, "
             "so the review is less independent."
         ]
+    elif not writer and binding["source"] == "default":
+        vendors = {ADAPTERS[name].vendor for name in policy.candidates("reviewer")}
+        if len(vendors) == 1:
+            binding["reductions"] = [
+                "Only one vendor's harness is available and Factory cannot tell "
+                "who wrote the change, so the reviewer's independence is unverified."
+            ]
     return binding
 
 

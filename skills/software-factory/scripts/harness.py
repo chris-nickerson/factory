@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 import uuid
@@ -19,6 +20,10 @@ from workspace import write_json as _save
 
 class HarnessError(RuntimeError):
     """The provider could not produce a trustworthy, complete turn."""
+
+
+# Linux refuses a single argument longer than 128 KiB.
+ARGUMENT_MAX_BYTES = 60_000
 
 
 class Claude:
@@ -212,6 +217,15 @@ class Codex:
             argv.extend(["--model", run["model_requested"]])
         if run["has_context"]:
             context = (directory / "context.txt").read_text(encoding="utf-8")
+            if len(context.encode()) > ARGUMENT_MAX_BYTES:
+                # Codex takes these instructions as one argument, and the OS
+                # limits an argument's size. Its sandbox can read the file.
+                context = (
+                    "The coordinator's instructions for this turn are in the file "
+                    f"{directory / 'context.txt'}. They are too long to include here "
+                    "and carry the same authority as this message. Read the whole "
+                    "file before you do anything else."
+                )
             argv.extend(
                 [
                     "-c",
@@ -291,6 +305,22 @@ def turn_capabilities(edit, local_shell):
     return {"edit", "sandboxed_shell"} if local_shell else {"edit", "file_only_edit"}
 
 
+def _name_parts(model):
+    return re.split(r"[-.]", model.lower())
+
+
+def _within(parts, name):
+    """Say whether `parts` appear in `name` as whole, consecutive parts.
+
+    A family names part of the reported model, and a dated name extends it.
+    Whole parts keep one version from matching another that starts the same.
+    """
+    return any(
+        name[start : start + len(parts)] == parts
+        for start in range(len(name) - len(parts) + 1)
+    )
+
+
 def _model_identity(record, result):
     requested = record["model_requested"]
     reported = result.get("model_usage", [])
@@ -298,10 +328,11 @@ def _model_identity(record, result):
         return "unreported"
     if not requested:
         return "unrequested"
-    # A request can be a family inside the reported name, or a longer form of
-    # it such as a dated name or one with a bracketed option.
-    wanted = requested.split("[")[0].lower()
-    if not any(wanted in name.lower() or name.lower() in wanted for name in reported):
+    wanted = _name_parts(requested.split("[")[0])
+    if not any(
+        _within(wanted, _name_parts(name)) or _within(_name_parts(name), wanted)
+        for name in reported
+    ):
         raise HarnessError(
             f"The harness reports {', '.join(reported)}, not the requested {requested}"
         )

@@ -148,6 +148,7 @@ with workspace_lock(repo):
                     os.environ,
                     PATH=str(root) + os.pathsep + os.environ["PATH"],
                     FACTORY_STATE_DIR=str(root / "state"),
+                    XDG_CONFIG_HOME=str(root / "config"),
                     HOOK_DIR=str(root),
                 )
 
