@@ -8,9 +8,13 @@ The README helps people decide whether to use the project and how to get started
 
 Keep one source for each fact. If the code or `--help` already gives a default or lists the flags, point readers there. Leave counts, timings and other details from a specific run out of maintained docs. They go stale quickly.
 
-## Document code where readers need it
+## Review comments in the diff
 
-Put a comment next to the code when the reason for it is hard to see. If the code works around a problem, trace the problem to its cause and explain the constraint the workaround handles. Remove comments that repeat the code or narrate a change. At public boundaries, document the inputs, outputs, errors and side effects callers can rely on.
+Read each changed comment, docstring and suppression beside the code it describes. Preserve license notices and public contracts, including inputs, outputs, errors and side effects. Keep a concise explanation where a reader could reasonably make the wrong change without knowing why the code is shaped that way. Remove narration, abandoned code and change history.
+
+When a comment describes a workaround, follow it to the cause. For a dependency or platform constraint, verify the affected version and behavior using the pinned source, an upstream issue or a reproduction. Keep the reason near the affected call. If Factory or the target project owns the cause, fix it within the task's scope. For a cause outside scope, retain any explanation still needed for safe maintenance and report what remains.
+
+For a lint or type-check suppression, identify the exact diagnostic and run the checker with the suppression removed. Fix a genuine defect. When the checker rejects a valid case, keep the narrowest justified exception. If a comment says two values must always agree, consider deriving one from the other or enforcing the invariant at the write boundary. Verify the original failure before deleting the explanation.
 
 ## Change documentation with the code
 

@@ -16,6 +16,14 @@ Give the developer or supervising agent a short comparison in the conversation b
 
 For example, a chat user wants to send another message as soon as an answer finishes. A trace showing the stream waiting on unused sandbox startup justifies testing that a text-only follow-up succeeds while startup is stalled. Both background warmup and startup on first use can pass that test. Warmup can shorten the wait at the first sandbox operation, but spends capacity on unused starts and needs an owner for work that outlives a turn. Starting on demand avoids that work and puts startup latency on the first operation. How often users need a sandbox and what that wait costs them would affect the recommendation. An assertion that a text-only turn starts zero sandboxes selects the on-demand policy. Freeze it only if that policy was chosen.
 
+## Trace the change beyond the diff
+
+For a design with several writers, identify what each owns. Two independent jobs that record their progress in one file can overwrite each other's updates. Separate progress records may remove the need for coordination. If the jobs consume one shared budget, enforce that limit where the budget is updated and exercise competing writes. For stateful code, list the valid states and transitions before adding flags that callers must keep in sync.
+
+When changing a boundary, follow a value to the consumer whose behavior depends on it. A symbol search can miss a shell script parsing stdout, a released client decoding a field, or a cleanup handler running after cancellation. Identify the assumption that makes the change safe and exercise that consumer. For example, when adding progress output to a command, pipe its output through the existing JSON reader.
+
+If successive fixes fail the same check, identify the assumption they share. For a queue that keeps growing after worker increases, measure arrivals and completions per partition. A single busy partition and a slow sink call for different fixes. Choose the next experiment by what would distinguish the explanations.
+
 ## Choose the baseline
 
 - **Bug fix or new behavior.** Exercise the reported failure or missing behavior through the public entry point. Replay the same case after the change.

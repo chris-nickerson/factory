@@ -30,7 +30,7 @@ When implementing or reviewing a change, [choose which tests to keep](references
 
 Run Factory simplification on every nontrivial PR, including local changes intended for a PR. Skip it for trivial edits such as typos or mechanical formatting. Select one fresh Opus round for a straightforward, localized behavior change, two for a moderate change with interacting pieces, and three for a large change or one with substantial access, data, or compatibility risk. Use scope and consequences to choose the tier. Pass the count with `--rounds` and finish the scheduled rounds even when an earlier round makes no edits.
 
-Include comment and documentation review in the task brief for code changes. Review the changed comments and docstrings before final review, including any added by a repair. Fix or delete the documentation the change makes false, following the [documentation guide](references/documentation.md#change-documentation-with-the-code). When pstack is available, use its no-comments workflow for the scoped diff. Preserve public contracts, license notices and verified external constraints. When a comment explains an internal workaround, inspect the code it points to and fix the cause within scope.
+Include comment and documentation review in the task brief for code changes. Before final review, [review the changed comments and documentation](references/documentation.md#review-comments-in-the-diff), including any added during repairs.
 
 Choose evidence by what controls the outcome. If the product depends on a model making a decision, use the target's supported model and execution path to observe that decision. For behavior determined by code, exercise the code directly. [Choosing model evidence](references/local.md#when-a-model-controls-the-outcome)
 
