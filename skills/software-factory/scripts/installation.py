@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -69,43 +70,38 @@ def skill_links(current):
     return {name: current / path for name, path in SKILL_RELEASE_PATHS.items()}
 
 
-def is_managed_skill_directory(path, current, templates):
+def is_managed_skill_directory(path, current, entry_digest):
     links = skill_links(current)
     entry = path / "SKILL.md"
     return (
-        path.is_dir()
+        entry_digest
+        and path.is_dir()
         and not path.is_symlink()
         and {p.name for p in path.iterdir()} == {"SKILL.md", *links}
-        and all(link_target(path / n) == str(t) for n, t in links.items())
+        and all(link_target(path / name) == str(target) for name, target in links.items())
         and entry.is_file()
         and not entry.is_symlink()
-        and any(t.is_file() and t.read_bytes() == entry.read_bytes() for t in templates)
+        and hashlib.sha256(entry.read_bytes()).hexdigest() == entry_digest
     )
 
 
-def publish_default_skill(path, current, template):
-    with tempfile.TemporaryDirectory(dir=path.parent) as temp:
+def publish_default_skill(path, current, entry, replace):
+    with tempfile.TemporaryDirectory(prefix=".factory-", dir=path.parent) as temp:
         stage = Path(temp) / "skill"
-        if template.is_file():
-            if path.is_dir() and not path.is_symlink():
-                shutil.copyfile(template, stage)
-                os.replace(stage, path / "SKILL.md")
-                return
+        if entry is None:
+            stage.symlink_to(current)
+        else:
             stage.mkdir()
-            shutil.copyfile(template, stage / "SKILL.md")
+            (stage / "SKILL.md").write_bytes(entry)
             for name, target in skill_links(current).items():
                 (stage / name).symlink_to(target)
-        elif path.is_symlink():
-            return
-        else:
-            stage.symlink_to(current)
         previous = Path(temp) / "previous"
-        if os.path.lexists(path):
+        if replace:
             path.rename(previous)
         try:
             stage.rename(path)
         except OSError:
-            if os.path.lexists(previous):
+            if replace:
                 previous.rename(path)
             raise
 
@@ -125,7 +121,6 @@ def install(
     manifest = root / "installation.json"
     saved = json.loads(manifest.read_text()) if manifest.exists() else {}
     default_skill_root = (Path.home() / ".agents/skills").resolve()
-    default_skill = default_skill_root / "software-factory"
     skills = (
         skill_dirs
         or [Path(d) for d in saved.get("skill_dirs", [])]
@@ -136,17 +131,25 @@ def install(
         raise ValueError(
             "Use the original skill directories for this installation or a different --prefix"
         )
+    registration = saved.get("skill_entry", {})
+    default_skill = Path(
+        registration.get("path", default_skill_root / "software-factory")
+    )
     destinations = {prefix / "bin/factory": current / "scripts/factory"}
     destinations.update({d / "software-factory": current for d in skills})
     if os.path.lexists(current) and (
         not current.is_symlink() or current.resolve().parent != root / "releases"
     ):
         raise ValueError(f"Foreign current release: {current}")
-    entries = (current / SKILL_ENTRY, source / SKILL_ENTRY)
+    has_entry = False
     for link, target in destinations.items():
         if not os.path.lexists(link) or link_target(link) == str(target):
             continue
-        if link != default_skill or not is_managed_skill_directory(link, current, entries):
+        if link == default_skill and is_managed_skill_directory(
+            link, current, registration.get("sha256")
+        ):
+            has_entry = True
+        else:
             raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
     if rollback:
@@ -180,11 +183,14 @@ def install(
     if remove:
         if not saved:
             raise ValueError("Missing installation manifest")
+        if has_entry:
+            with tempfile.TemporaryDirectory(
+                prefix=".factory-", dir=default_skill.parent
+            ) as temp:
+                default_skill.rename(Path(temp) / "retired")
         for link in destinations:
             if link.is_symlink():
                 link.unlink()
-            elif link.is_dir():
-                shutil.rmtree(link)
         current.unlink(missing_ok=True)
         manifest.unlink()
         return report
@@ -209,21 +215,35 @@ def install(
             if probe.returncode:
                 raise ValueError(f"Factory CLI failed to start: {probe.stderr.strip()}")
             stage.rename(release)
-    for link, target in destinations.items():
-        link.parent.mkdir(parents=True, exist_ok=True)
-        if link == default_skill:
-            publish_default_skill(link, current, release / SKILL_ENTRY)
-        elif not link.is_symlink():
-            link.symlink_to(target)
-    previous = old if old and old != str(release) else saved.get("previous")
-    write_json(
-        manifest,
-        dict(
-            skill_dirs=list(map(str, skills)),
-            previous=previous,
-            update_origin=origin or saved.get("update_origin") or DEFAULT_ORIGIN,
-        ),
+    configuration = dict(
+        skill_dirs=list(map(str, skills)),
+        previous=saved.get("previous"),
+        update_origin=origin or saved.get("update_origin") or DEFAULT_ORIGIN,
     )
+    if registration:
+        configuration["skill_entry"] = registration
+    if default_skill in destinations:
+        template = release / SKILL_ENTRY
+        wants_entry = template.is_file()
+        had_link = link_target(default_skill) == str(current)
+        default_skill.parent.mkdir(parents=True, exist_ok=True)
+        if wants_entry and not has_entry:
+            entry = template.read_bytes()
+            configuration["skill_entry"] = {
+                "path": str(default_skill),
+                "sha256": hashlib.sha256(entry).hexdigest(),
+            }
+            write_json(manifest, configuration)
+            publish_default_skill(default_skill, current, entry, replace=had_link)
+        elif not wants_entry and (has_entry or not had_link):
+            publish_default_skill(default_skill, current, None, replace=has_entry)
+    for link, target in destinations.items():
+        if link != default_skill and not link.is_symlink():
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(target)
+    if old and old != str(release):
+        configuration["previous"] = old
+    write_json(manifest, configuration)
     replace_link(current, release)
     return report
 

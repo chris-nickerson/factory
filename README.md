@@ -43,7 +43,7 @@ factory doctor
 
 The defaults are `~/.local/bin/factory` and `~/.agents/skills/software-factory`. To use the command in later shells, keep `~/.local/bin` on your PATH. Open your target checkout in a fresh agent session. Try **“Use Software Factory to reproduce this bug, fix it, and verify it through the public entry point.”** A shell-capable agent can also read the skill directly. For Claude Code project skills, install with a separate `--prefix` and `--skill-dir /path/to/project/.claude/skills`. [Agent entry point](skills/software-factory/SKILL.md)
 
-The default skill directory contains a regular `SKILL.md` so agents that skip linked directories can discover it. The entry opens the instructions for the same release as the CLI. If provider CLIs are unavailable, use `factory doctor --profile local` and the [local evidence workflow](skills/software-factory/references/local.md).
+The default skill directory contains a regular `SKILL.md` so agents that skip linked directories can discover it. The entry stays in place and opens the instructions for the same release as the CLI. If provider CLIs are unavailable, use `factory doctor --profile local` and the [local evidence workflow](skills/software-factory/references/local.md).
 
 | Task | Entry point | Evidence |
 | --- | --- | --- |

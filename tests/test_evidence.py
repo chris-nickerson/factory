@@ -450,12 +450,14 @@ class FactoryTests(unittest.TestCase):
         template.unlink()
         skill = self.home / ".agents/skills/software-factory"
         cli = self.home / ".local/bin/factory"
-        cmd = [sys.executable, str(clone / "install.py")]
+        cmd = [
+            sys.executable, str(clone / "install.py"), "--prefix", str(cli.parent.parent)
+        ]
 
-        def install(*args, check=True):
+        def install(*args, check=True, home=self.home):
             return subprocess.run(
                 cmd + list(args),
-                env={**self.env, "HOME": str(self.home)},
+                env={**self.env, "HOME": str(home)},
                 check=check,
                 capture_output=True,
             )
@@ -466,6 +468,7 @@ class FactoryTests(unittest.TestCase):
         template.write_bytes(entry)
         install("--dry-run")
         self.assertTrue(skill.is_symlink())
+        self.assertEqual(cli.resolve(), original)
         install()
         self.assertTrue(skill.is_dir())
         self.assertFalse(skill.is_symlink())
@@ -484,13 +487,13 @@ class FactoryTests(unittest.TestCase):
         template.write_bytes(entry + b"\nNext release.\n")
         install()
         self.assertFalse((skill / "SKILL.md").is_symlink())
-        self.assertEqual((skill / "SKILL.md").read_bytes(), template.read_bytes())
+        self.assertEqual((skill / "SKILL.md").read_bytes(), entry)
         extra = skill / "user-notes"
         extra.write_text("keep")
         self.assertNotEqual(install("--remove", check=False).returncode, 0)
         self.assertEqual(extra.read_text(), "keep")
         extra.unlink()
-        install("--remove")
+        install("--remove", home=self.home / "different-home")
         self.assertFalse(skill.exists())
         self.assertFalse(cli.is_symlink())
 
