@@ -101,7 +101,6 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-# Probe the host's next action and whether it credits the supplied visual evidence.
 DELIVERY_DECISIONS = {
     "delivery-start": ("obtain design consensus", False),
     "delivery-pending": ("continue verification", False),
@@ -195,25 +194,18 @@ def main():
             observed = json.loads(prefix.with_suffix(".jsonl").read_text()).get("structured_output")
         elif result.returncode == 0:
             observed = json.loads(prefix.with_suffix(".json").read_text())
-        expected = dict(
-            skill="software-factory", procedure=route, publish=publish,
-            tier=tier[0] if tier else "role default",
-        )
+        tier = tier[0] if tier else "role default"
+        expected = dict(skill="software-factory", procedure=route, publish=publish)
         if name in DELIVERY_DECISIONS:
             expected["next_action"], expected["ui_evidence_available"] = DELIVERY_DECISIONS[name]
-            # A delivery spans roles with separate model choices.
-            del expected["tier"]
+        elif tier != MODEL_NAMED_BY_USER:
+            expected["tier"] = tier
+        if "tier" not in expected:
             (observed or {}).pop("tier", None)
         role_spec = (observed or {}).pop("role_spec", "")
-        named_model_kept = True
-        if expected.get("tier") == MODEL_NAMED_BY_USER:
-            del expected["tier"]
-            (observed or {}).pop("tier", None)
-            named_model_kept = bool(
-                re.fullmatch(
-                    rf"--simplifier[ =](claude)?:{MODEL_NAMED_BY_USER}", role_spec.strip()
-                )
-            )
+        named_model_kept = tier != MODEL_NAMED_BY_USER or bool(
+            re.fullmatch(rf"--simplifier[ =](claude)?:{MODEL_NAMED_BY_USER}", role_spec.strip())
+        )
         return dict(case=name, trial=trial, observed=observed, expected=expected,
                     role_spec=role_spec, cli_exit=result.returncode,
                     passed=observed == expected and named_model_kept)
