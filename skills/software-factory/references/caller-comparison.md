@@ -28,7 +28,7 @@ Run each of the four tasks in both arms, on separate copies of the same revision
 3. Run the hidden follow-on check and replay the original check on the modified checkout.
 4. A reviewer blind to assignment judges both stages against the frozen contracts. Credit each task once per arm only if both stages and the required delivery reviews pass within budget. Either copy can earn pilot credit without shipping.
 
-Keep one record per attempt outside the checkout. Include the task, arm, budget, revisions, run IDs, owner minutes by activity, interruptions, elapsed time per stage, time to a correct follow-on, unique defects and repair cycles. Record tokens from the harness usage logs and dollars from billing or a common dated price schedule. Include failed runs, retries, timeouts and reverts in time and spend. Mark unavailable usage and censored times explicitly.
+Keep one record per attempt outside the checkout. Include the task, arm, budget, revisions, run IDs, owner minutes by activity, interruptions, elapsed time per stage, time to a correct follow-on, unique defects and repair cycles. Use the harness session IDs in the run receipts to attribute tokens from the CLI usage logs and dollars from billing or a common dated price schedule. Include failed runs, retries, timeouts and reverts in time and spend. Mark unavailable usage and censored times explicitly.
 
 ## Decide whether to advance
 
@@ -38,7 +38,7 @@ Compare total credited value divided by all owner hours in each arm. Keep the cu
 - At least as many successful tasks and no new serious defect or broken contract.
 - At most 10% higher median initial elapsed time, median time to a correct follow-on and total model spend. Apply the 10% limit to owner minutes on the routine edit as well.
 
-Four pairs screen for an effect. If baseline variation could explain the gain, repeat the noisy cases with fresh sessions before advancing. Include repeats in the costs and credit each task only once. If either arm records zero owner hours or the baseline arm earns zero value, the percentage gain is undefined. Keep the current workflow in that case or when missing observations could reverse the decision.
+Four pairs screen for an effect. If ordinary variation could explain the gain, stop with an inconclusive result. A further trial needs fresh pairs and a new contract. If either arm records zero owner hours or the baseline arm earns zero value, the percentage gain is undefined. Keep the current workflow in that case or when missing observations could reverse the decision.
 
 ## Confirm on shipped work
 
