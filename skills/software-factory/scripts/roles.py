@@ -306,15 +306,12 @@ def resolve(role, policy, *, explicit=None, avoid_vendor=None):
             (n for n in options if ADAPTERS[n].vendor != avoid_vendor), options[0]
         )
     selector, model_source = policy.default_model(role), "default"
-    for index, (layer, written_for, model) in reversed(list(enumerate(specs))):
+    for index, (layer, written_for, model) in enumerate(specs):
         # A family or complete name belongs to the harness it was written
         # for. Written alone, it applies unless a later layer chose a harness.
-        fits = written_for == harness or (
-            written_for is None and index > harness_set_at
-        )
+        fits = written_for == harness or index > harness_set_at
         if model and (model in PORTABLE_MODELS or fits):
             selector, model_source = model, layer
-            break
     return {
         "role": role,
         "harness": harness,
@@ -388,12 +385,14 @@ def consensus_pair(policy, *, a=None, b=None, harness_models=None):
     second = resolve("consensus-b", policy, explicit=b, avoid_vendor=first["vendor"])
     pair = {"a": first, "b": second}
     for harness, model in (harness_models or {}).items():
+        if not model:
+            continue
         slots = [slot for slot in pair if pair[slot]["harness"] == harness]
-        if model and not slots:
+        if not slots:
             raise RoleError(
                 f"A model was given for {harness}, and no consensus participant uses it."
             )
-        for slot in slots if model else ():
+        for slot in slots:
             pair[slot] = {**pair[slot], "selector": model, "model_source": "flag"}
     pair = {slot: bind_model(binding, policy) for slot, binding in pair.items()}
     first, second = pair["a"], pair["b"]

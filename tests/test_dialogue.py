@@ -145,8 +145,10 @@ class DialogueTests(unittest.TestCase):
         self.assertEqual((2, "blocked"), (code, out["status"]))
         path = Path(out["artifacts"]) / "run.json"
         meta = json.loads(path.read_text())
+        meta["models"] = {
+            slot: binding["model"] for slot, binding in meta.pop("participants").items()
+        }
         self.assertEqual(meta["models"], {"a": "gpt-9.1-astra", "b": "opus"})
-        del meta["participants"]
         meta["version"] = 2
         path.write_text(json.dumps(meta))
         use_machine(self)

@@ -309,16 +309,7 @@ def consume_call(run, record, folder, recover):
         raise Pending("The simplifier session changed within a round.")
     if any(old.get("session_id") == session for old in run["rounds"][:-1]):
         raise Pending("The simplifier reused a previous round's context.")
-    reported = receipt.get("model_reported")
-    harness_compared = "model_identity" in receipt
-    if (
-        not harness_compared
-        and reported
-        and binding["model"]
-        and binding["model"].lower() not in reported.lower()
-    ):
-        raise Pending(f"The harness reported a different model: {reported}.")
-    record.update(session_id=session, model_reported=reported)
+    record.update(session_id=session, model_reported=receipt.get("model_reported"))
     text = receipt["text"].strip()
     if call["kind"] == "assess":
         last = text.splitlines()[-1] if text else ""

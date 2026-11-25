@@ -9,6 +9,9 @@ import sys
 import time
 import uuid
 
+from harness import ADAPTERS, run_turn
+import roles
+from rounds import last_writer
 from supervision import captured_check as run_command
 from workspace import (
     ensure_visible_index,
@@ -315,9 +318,6 @@ MODEL_FLAG_HARNESS = "codex"
 
 def review_writer(repo, policy):
     """Describe who last changed the subject, so the reviewer can differ."""
-    from harness import ADAPTERS
-    from rounds import last_writer
-
     simplified = last_writer(repo)
     if simplified:
         harness, run = simplified
@@ -337,9 +337,6 @@ def review_writer(repo, policy):
 
 
 def review(args):
-    from harness import ADAPTERS, run_turn
-    import roles
-
     if args.timeout is not None:
         print(
             "Factory ignores the legacy review time limit. Agent turns run until completion or cancellation.",

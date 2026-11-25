@@ -44,6 +44,17 @@ PROPOSE = (
 SCHEMA = 3
 
 
+def _participant(meta, actor):
+    """Return the saved binding, or the fixed pair of records before version 3."""
+    if "participants" in meta:
+        return meta["participants"][actor]
+    return {
+        "harness": HARNESSES_BEFORE_PARTICIPANTS[actor],
+        "model": meta["models"][actor],
+        "selector": None,
+    }
+
+
 class DialogueError(RuntimeError):
     pass
 
@@ -202,12 +213,11 @@ def _view(directory, message=None):
 
 def _response(directory, meta, step, actor, prompt, context, session=None):
     """Recover a completed provider call before issuing any replacement."""
-    participant = meta.get("participants", {}).get(actor, {})
+    participant = _participant(meta, actor)
     request = {
-        "provider": participant.get("harness")
-        or HARNESSES_BEFORE_PARTICIPANTS[actor],
+        "provider": participant["harness"],
         "repo": meta["repo"],
-        "model": meta["models"][actor],
+        "model": participant["model"],
         "session_id": session,
         "prompt_sha256": _digest(prompt),
         "context_sha256": _digest(context),
@@ -249,7 +259,7 @@ def _response(directory, meta, step, actor, prompt, context, session=None):
         prompt=prompt,
         context=context,
         model=request["model"],
-        selector=participant.get("selector"),
+        selector=participant["selector"],
         session_id=session,
         edit=False,
         output_dir=attempt / "call",
@@ -442,7 +452,6 @@ def handle(args):
                 "subject": subject,
                 "mode": action,
                 "participants": participants,
-                "models": {slot: b["model"] for slot, b in participants.items()},
                 "exchanges": args.exchanges,
             },
         )
