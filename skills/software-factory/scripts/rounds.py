@@ -74,10 +74,12 @@ def last_writer(repo):
         if (
             run["status"] != "complete"
             or rounds[-1]["output"] != rev(repo, "HEAD")
-            or all(r["output"] == r["input"] for r in rounds)
             or git(repo, "status", "--porcelain").strip()
         ):
             return None
+        if all(r["output"] == r["input"] for r in rounds):
+            earlier = run.get("writer_before")
+            return tuple(earlier) if earlier else None
     except (OSError, ValueError, KeyError, IndexError, RuntimeError, subprocess.SubprocessError):
         return None
     return saved_simplifier(run)["harness"], run["id"]
@@ -154,6 +156,8 @@ def create_run(args, repo):
                 run["original_remote"],
                 run["start"],
             )
+    # A run that changes nothing must not hide who wrote the commit it started from.
+    run["writer_before"] = last_writer(repo)
     owner = owner_path(str(repo))
     owner.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if owner.exists():

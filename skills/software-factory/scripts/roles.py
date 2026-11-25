@@ -359,27 +359,26 @@ def bind_model(binding, policy):
     family = policy.family(harness, selector) if selector in TIERS else selector
     try:
         model = ADAPTERS[harness].resolve_model(family, policy.probe)
-    except CatalogUnavailable as error:
-        if selector not in TIERS:
+    except HarnessError as error:
+        no_catalog = isinstance(error, CatalogUnavailable)
+        if no_catalog and selector not in TIERS:
             # The caller wrote this name, so the harness can accept or refuse it.
             return {**binding, "model": selector, "family": None}
-        if binding["model_source"] == "default":
+        if selector in TIERS and binding["model_source"] == "default":
             return {
                 **binding,
                 "model": None,
                 "family": None,
                 "reductions": [
                     *binding["reductions"],
-                    f"{ADAPTERS[harness].title} could not list its models, so this "
-                    f"role uses the harness default model, not the {selector} tier.",
+                    f"{ADAPTERS[harness].title} offered no {selector} model, so "
+                    "this role uses the harness default model.",
                 ],
             }
         raise RoleError(
-            f"{error} To proceed without the catalog, set the {binding['role']} "
-            f"role to {harness}:{HARNESS_DEFAULT} or name a complete model."
+            f"{error} Set the {binding['role']} role to {harness}:{HARNESS_DEFAULT} "
+            "to use the harness default, or name a complete model."
         ) from error
-    except HarnessError as error:
-        raise RoleError(str(error)) from error
     return {**binding, "model": model, "family": family}
 
 

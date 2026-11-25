@@ -624,6 +624,14 @@ class FactoryTests(unittest.TestCase):
         steps = " ".join(paired["next_steps"])
         for command in ("codex login", "claude auth login", "factory doctor --profile local"):
             self.assertIn(command, steps)
+        broken_host = subprocess.run(
+            [sys.executable, str(CLI), "doctor"],
+            env={**self.env, "PATH": str(bin_dir), "FACTORY_HOST": "gemini"},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(broken_host.returncode, 0, broken_host.stderr)
+        self.assertIn("FACTORY_HOST", json.loads(broken_host.stdout)["roles_error"])
         local = doctor("local", 0)
         self.assertEqual(local["status"], "AVAILABLE")
         self.assertEqual(

@@ -22,9 +22,12 @@ def diagnose(args):
     exe = shutil.which("git")
     rc, version = roles.probe([exe, "--version"]) if exe else (2, "")
     checks["git"] = {"available": rc == 0, "path": exe, "version": version}
-    resolved = role_report(repo_root(Path(args.repo)))
+    try:
+        resolved = role_report(repo_root(Path(args.repo)))
+    except (ValueError, OSError, RuntimeError) as error:
+        resolved = {"roles_error": str(error)}
     if args.profile == "paired":
-        for name, details in resolved["harnesses"].items():
+        for name, details in (resolved.get("harnesses") or roles.installed()).items():
             checks[name] = {
                 key: details[key]
                 for key in ("available", "path", "version", "authenticated")

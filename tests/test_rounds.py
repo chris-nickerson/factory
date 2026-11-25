@@ -166,6 +166,10 @@ class RoundsTests(unittest.TestCase):
         )
         self.assertIn("return a + b", self.git("show", "HEAD:calc.py"))
         self.assertEqual(rounds.last_writer(self.repo), ("codex", result["id"]))
+        code, unchanged = self.invoke(*self.start, "--rounds", "1")
+        self.assertEqual(code, 0, unchanged)
+        self.assertEqual(unchanged["rounds"][0]["input"], unchanged["rounds"][0]["output"])
+        self.assertEqual(rounds.last_writer(self.repo), ("codex", result["id"]))
 
     def test_run_saved_by_the_previous_release_reports_and_resumes(self):
         with patch.object(

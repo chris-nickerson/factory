@@ -190,6 +190,14 @@ class RoleTests(unittest.TestCase):
         with self.assertRaisesRegex(roles.RoleError, "'high' family"):
             model("codex:high")
 
+    def test_default_tier_falls_back_when_the_catalog_lacks_its_family(self):
+        use_machine(self, "codex", catalog=[fake_machine.UNHYPHENATED])
+        fallback = self.reviewer(writer=CLAUDE_WROTE)
+        self.assertIsNone(fallback["model"])
+        self.assertIn("harness default model", fallback["reductions"][0])
+        with self.assertRaisesRegex(roles.RoleError, "codex:default"):
+            self.reviewer(explicit=":frontier")
+
     def test_codex_without_a_catalog_still_takes_a_complete_name_or_its_default(self):
         use_machine(self, "codex", catalog=None)
         self.assertIsNone(self.reviewer(explicit="codex:default")["model"])
