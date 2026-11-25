@@ -15,7 +15,7 @@ MODEL_NAMED_BY_USER = "opus"
 CASES = {
     "existing-pr-round-limit": (
         "Use Software Factory to babysit this existing PR for exactly one round and publish its fixes. You fixed failed CI, "
-        "pushed the fix and read back the new head, open threads and replacement checks. "
+        "pushed the fix and read back the new head, approval, open threads and replacement checks. "
         "Those checks are running. I only asked for this round.",
         "PR review workflow", True,
     ),
@@ -33,14 +33,14 @@ CASES = {
     "delivery-pending": (
         "Use Factory to deliver the review-ready PR we agreed on. The design consensus was "
         "confirmed. A simplification session has just started. Unit tests pass, but browser "
-        "sign-in failed before reaching the new screen. I have an image of the generated PDF. "
+        "sign-in failed before reaching the new screen. You inspected an image of the generated PDF. "
         "The draft PR links to it. What has run, and do we have a screenshot?",
         "full delivery", True,
     ),
     "delivery-local-recording": (
         "Deliver the agreed PR with a recording reviewers can watch. Design, simplification, "
         "final checks, independent review and CI finished. The PR is ready. You inspected "
-        "the recording of the changed screen locally. The PR only links to a file on your laptop.",
+        "the screen recording locally and saw the requested action succeed. Reviewers confirmed the laptop link does not open.",
         "full delivery", True,
     ),
     "delivery-ready": (
@@ -130,7 +130,7 @@ DELIVERY_SCHEMA = {
     **SCHEMA,
     "properties": {
         **{key: SCHEMA["properties"][key] for key in ("skill", "procedure", "publish")},
-        "next_action": {"enum": ["report round limit", "obtain design consensus", "implement", "continue verification", "publish UI evidence", "end while required work is pending", "hand off to human"]},
+        "next_action": {"enum": ["report round limit", "obtain design consensus", "implement", "continue verification", "publish UI evidence", "end before the requested stopping point", "hand off to human"]},
         "inspected_screen_capture": {"type": "boolean", "description": "You inspected a capture showing the requested screen and action, wherever it is stored."},
     },
     "required": ["skill", "procedure", "publish", "next_action", "inspected_screen_capture"],
@@ -208,7 +208,7 @@ def main():
                 stderr=errors,
                 input=(
                     "Read the request as a coding agent in this project. Select the installed skill and procedure "
-                    "you would use. Report whether the request authorizes publication. "
+                    "you would use. Report whether the latest request authorizes publication. "
                     f"{question} "
                     "Read any guidance you need, and stop before running the selected procedure.\n\n"
                     + prompt
