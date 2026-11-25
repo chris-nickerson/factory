@@ -398,7 +398,7 @@ def register(subparsers):
         # Accept invocations generated for the old CLI without limiting agents.
         config.add_argument("--timeout", type=_positive, help=argparse.SUPPRESS)
         config.add_argument("--deadline", type=_positive, help=argparse.SUPPRESS)
-        for slot in HARNESSES_BEFORE_PARTICIPANTS:
+        for slot in ("a", "b"):
             config.add_argument(
                 f"--{slot}",
                 metavar="SPEC",

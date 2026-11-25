@@ -248,7 +248,7 @@ class Policy:
         return parse_spec(self.shipped["roles"][role])[1]
 
     def family(self, harness, tier):
-        for _, tables in reversed([("shipped", self.shipped), *self.layers]):
+        for tables in (*(layer for _, layer in reversed(self.layers)), self.shipped):
             name = tables.get("models", {}).get(harness, {}).get(tier)
             if name:
                 return name
@@ -262,7 +262,7 @@ class Policy:
         return [
             name
             for name in [*order, *(n for n in ADAPTERS if n not in order)]
-            if self.harnesses.get(name, {}).get("available")
+            if self.harnesses[name]["available"]
             and ROLE_NEEDS[role] <= ADAPTERS[name].capabilities
         ]
 

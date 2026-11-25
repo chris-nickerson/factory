@@ -396,8 +396,8 @@ def review(args):
             "read_only_shell" in ADAPTERS[binding["harness"]].capabilities
         )
         if not reviewer_runs_git:
-            staged = diff("--full-index", "--cached", base)
-            unstaged = diff("--full-index")
+            staged = diff("--patch", "--cached", base)
+            unstaged = diff("--patch")
         receipt = dict(
             subject=subject,
             base=base,
