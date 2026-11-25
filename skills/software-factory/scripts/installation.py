@@ -1,7 +1,8 @@
 """Install and update the CLI and skill as one content-addressed release."""
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,10 +11,11 @@ import subprocess
 import sys
 import tempfile
 
-from workspace import git, release_id, write_json
+from workspace import SKILL_RELEASE_PATHS, git, release_id, write_json
 
 
 DEFAULT_ORIGIN = "https://github.com/chris-nickerson/factory.git"
+SKILL_ENTRY = "scripts/skill-entry.md"
 
 
 def git_environment():
@@ -53,6 +55,16 @@ def installation_lock(prefix):
         yield
 
 
+@contextmanager
+def skill_root_lock(path):
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
 def link_target(path):
     return os.readlink(path) if path.is_symlink() else None
 
@@ -62,6 +74,65 @@ def replace_link(link, target):
         temporary = Path(directory) / "next"
         temporary.symlink_to(target)
         os.replace(temporary, link)
+
+
+def skill_links(current):
+    return {name: current / path for name, path in SKILL_RELEASE_PATHS.items()}
+
+
+def is_managed_skill_directory(path, current, entry_digest):
+    links = skill_links(current)
+    entry = path / "SKILL.md"
+    return (
+        entry_digest
+        and path.is_dir()
+        and not path.is_symlink()
+        and {p.name for p in path.iterdir()} == {"SKILL.md", *links}
+        and all(link_target(path / name) == str(target) for name, target in links.items())
+        and entry.is_file()
+        and not entry.is_symlink()
+        and hashlib.sha256(entry.read_bytes()).hexdigest() == entry_digest
+    )
+
+
+def skill_transition(path):
+    return path.with_name("." + path.name + ".previous")
+
+
+def discard_skill_transition(path):
+    with tempfile.TemporaryDirectory(prefix=".factory-", dir=path.parent) as temp:
+        path.rename(Path(temp) / "retired")
+
+
+def publish_default_skill(path, current, entry, replace):
+    with tempfile.TemporaryDirectory(prefix=".factory-", dir=path.parent) as temp:
+        stage = Path(temp) / "skill"
+        if entry is None:
+            stage.symlink_to(current)
+        else:
+            stage.mkdir()
+            (stage / "SKILL.md").write_bytes(entry)
+            for name, target in skill_links(current).items():
+                (stage / name).symlink_to(target)
+        previous = skill_transition(path)
+        if replace:
+            path.rename(previous)
+        try:
+            stage.rename(path)
+        except OSError:
+            if replace:
+                previous.rename(path)
+            raise
+        if replace:
+            discard_skill_transition(previous)
+
+
+def read_installation(manifest, current):
+    saved = json.loads(manifest.read_text()) if manifest.exists() else {}
+    pending = saved.pop("pending_release", None)
+    if pending and link_target(current) == pending["release"]:
+        saved.update(previous=pending["previous"], commit=pending["commit"])
+    return saved
 
 
 def install(
@@ -78,26 +149,100 @@ def install(
     root = prefix / "lib/software-factory"
     current = root / "current"
     manifest = root / "installation.json"
-    saved = json.loads(manifest.read_text()) if manifest.exists() else {}
+    saved = read_installation(manifest, current)
+    default_skill_root = (Path.home() / ".agents/skills").resolve()
     skills = (
         skill_dirs
         or [Path(d) for d in saved.get("skill_dirs", [])]
-        or [Path.home() / ".agents/skills"]
+        or [default_skill_root]
     )
     skills = [d.expanduser().resolve() for d in skills]
     if saved and set(map(str, skills)) != set(saved["skill_dirs"]):
         raise ValueError(
             "Use the original skill directories for this installation or a different --prefix"
         )
+    if prefix.name == ".local" and default_skill_root not in skills:
+        default_skill_root = (prefix.parent / ".agents/skills").resolve()
+    registration = saved.get("skill_entry", {})
+    default_skill = Path(
+        registration.get("path", default_skill_root / "software-factory")
+    )
+    with ExitStack() as locks:
+        if not dry_run:
+            for skill_root in sorted(set(skills)):
+                if not remove:
+                    skill_root.mkdir(parents=True, exist_ok=True)
+                if skill_root.is_dir():
+                    locks.enter_context(skill_root_lock(skill_root))
+        return install_release(
+            prefix,
+            source,
+            saved,
+            skills,
+            default_skill,
+            origin=origin,
+            rollback=rollback,
+            remove=remove,
+            dry_run=dry_run,
+            commit=commit,
+        )
+
+
+def install_release(
+    prefix,
+    source,
+    saved,
+    skills,
+    default_skill,
+    *,
+    origin,
+    rollback,
+    remove,
+    dry_run,
+    commit,
+):
+    root = prefix / "lib/software-factory"
+    current = root / "current"
+    manifest = root / "installation.json"
+    registration = saved.get("skill_entry", {})
     destinations = {prefix / "bin/factory": current / "scripts/factory"}
     destinations.update({d / "software-factory": current for d in skills})
-    for link, target in destinations.items():
-        if os.path.lexists(link) and link_target(link) != str(target):
-            raise ValueError(f"Path already owned by another installation: {link}")
     if os.path.lexists(current) and (
         not current.is_symlink() or current.resolve().parent != root / "releases"
     ):
         raise ValueError(f"Foreign current release: {current}")
+    detached = remove and saved and not os.path.lexists(current) and not os.path.lexists(
+        prefix / "bin/factory"
+    )
+    has_entry = False
+    for link, target in destinations.items():
+        if link == prefix / "bin/factory":
+            continue
+        previous = skill_transition(link)
+        if not os.path.lexists(previous):
+            continue
+        if link_target(previous) != str(target) and not is_managed_skill_directory(
+            previous, current, registration.get("sha256")
+        ):
+            if detached:
+                continue
+            raise ValueError(f"Another installation owns the pending skill change: {link}")
+        if not dry_run:
+            if not os.path.lexists(link):
+                previous.rename(link)
+            elif link_target(link) == str(target) or is_managed_skill_directory(
+                link, current, registration.get("sha256")
+            ):
+                discard_skill_transition(previous)
+    for link, target in destinations.items():
+        if not os.path.lexists(link) or link_target(link) == str(target):
+            continue
+        if link == default_skill and is_managed_skill_directory(
+            link, current, registration.get("sha256")
+        ):
+            has_entry = True
+        elif not detached:
+            raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
     if rollback:
         new = saved.get("previous")
@@ -130,10 +275,19 @@ def install(
     if remove:
         if not saved:
             raise ValueError("Missing installation manifest")
-        for link in destinations:
-            if link.is_symlink():
-                link.unlink()
+        retired = []
+        for skill_root in skills:
+            path = skill_root / "software-factory"
+            if link_target(path) == str(current) or (path == default_skill and has_entry):
+                previous = skill_transition(path)
+                path.rename(previous)
+                retired.append(previous)
+        cli = prefix / "bin/factory"
+        if link_target(cli) == str(current / "scripts/factory"):
+            cli.unlink()
         current.unlink(missing_ok=True)
+        for previous in retired:
+            discard_skill_transition(previous)
         manifest.unlink()
         return report
     release.parent.mkdir(parents=True, exist_ok=True)
@@ -157,21 +311,50 @@ def install(
             if probe.returncode:
                 raise ValueError(f"Factory CLI failed to start: {probe.stderr.strip()}")
             stage.rename(release)
-    for link, target in destinations.items():
-        link.parent.mkdir(parents=True, exist_ok=True)
-        if not link.is_symlink():
-            link.symlink_to(target)
-    previous = old if old and old != str(release) else saved.get("previous")
-    write_json(
-        manifest,
-        dict(
-            skill_dirs=list(map(str, skills)),
-            previous=previous,
-            update_origin=origin or saved.get("update_origin") or DEFAULT_ORIGIN,
-            commit=commit,
-        ),
+    configuration = dict(
+        skill_dirs=list(map(str, skills)),
+        previous=saved.get("previous"),
+        commit=saved.get("commit"),
+        update_origin=origin or saved.get("update_origin") or DEFAULT_ORIGIN,
     )
+    if registration:
+        configuration["skill_entry"] = registration
+    entry = None
+    had_link = False
+    if default_skill in destinations:
+        template = release / SKILL_ENTRY
+        wants_entry = template.is_file()
+        had_link = link_target(default_skill) == str(current)
+        default_skill.parent.mkdir(parents=True, exist_ok=True)
+        if wants_entry and not has_entry:
+            entry = template.read_bytes()
+            configuration["skill_entry"] = {
+                "path": str(default_skill),
+                "sha256": hashlib.sha256(entry).hexdigest(),
+            }
+        elif not wants_entry and (has_entry or not had_link):
+            publish_default_skill(default_skill, current, None, replace=has_entry)
+    for link, target in destinations.items():
+        if link != default_skill and not link.is_symlink():
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(target)
+    switching = old and old != str(release)
+    if switching:
+        configuration["pending_release"] = {
+            "release": str(release),
+            "previous": old,
+            "commit": commit,
+        }
+    else:
+        configuration["commit"] = commit
+    write_json(manifest, configuration)
     replace_link(current, release)
+    if entry is not None:
+        publish_default_skill(default_skill, current, entry, replace=had_link)
+    if switching:
+        configuration.pop("pending_release")
+        configuration.update(previous=old, commit=commit)
+        write_json(manifest, configuration)
     return report
 
 
@@ -190,7 +373,7 @@ def update(args):
     if not manifest.is_file():
         raise ValueError("Install Factory once with python3 install.py before updating")
     with installation_lock(prefix):
-        saved = json.loads(manifest.read_text())
+        saved = read_installation(manifest, root / "current")
         origin = saved.get("update_origin", DEFAULT_ORIGIN)
         previous = saved.get("commit")
         old = (root / "current").resolve(strict=True)

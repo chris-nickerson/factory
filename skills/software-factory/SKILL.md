@@ -7,6 +7,8 @@ description: Use Factory for evidence-backed engineering tasks, independent desi
 
 Use the executable at `scripts/factory` relative to this skill's real directory, or a matching installed `factory`. Use `factory doctor --profile paired` when a task requires both providers. Start discovery with `factory inspect --repo PATH` and pass `--path` for the affected component. Read the applicable repository instructions and verify which commands exercise the requested behavior. The scan lists candidates and their sources. The host and task determine which actions are authorized.
 
+On hosts without the provider CLIs, use `factory doctor --profile local` and the [local evidence workflow](references/local.md). Independent review requires Codex; simplification requires Claude Code; consensus requires both.
+
 | User's request | Entry |
 | --- | --- |
 | Diagnose or decide independently with a second model | Use `factory consensus`. [Consensus procedure](references/consensus.md) |
