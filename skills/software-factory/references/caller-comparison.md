@@ -1,6 +1,6 @@
 # Try the simpler path against its caller
 
-Use this pilot to decide whether a short change to the task brief saves maintainer time. It uses the usual implementation, simplification and independent review procedures. Only the arms of an enrolled trial use the candidate brief. The current workflow stays the default unless the confirmation in step 6 passes.
+Use this pilot to decide whether a short change to the task brief saves maintainer time. It uses the usual implementation, simplification and independent review procedures. Use the candidate brief only in the experimental arm.
 
 ## Candidate task brief
 
@@ -13,7 +13,7 @@ For example, an assessment written by an older release can reach the commit step
 ## Compare with the current workflow
 
 1. **Enroll the tasks.** Before inspecting any agent output, choose four wanted tasks: a local behavior change, a multi-caller change, a compatibility or external-tool change and a routine control. For each task, reserve a realistic follow-on edit and an independent acceptance check, and keep both hidden from the initial agent. Agree on value weights now, or give equally valuable tasks equal weight.
-2. **Run matched pairs.** Run each task twice in separate worktrees from the same revision, once with the current brief and once with the paragraph above. Match model and harness versions, allowed tools, checks, simplification rounds, spend caps and time limits. Randomize order within each pair, and alternate which result the maintainer reads first.
+2. **Run matched pairs.** Run each task twice in separate worktrees from the same revision, once with the current brief and once with the paragraph above. Give both evidence runs the same task-specific acceptance brief in `factory start --task`. Factory includes that text in the review prompt. Keep arm labels, the candidate paragraph and trial notes out of the review inputs. Match model and harness versions, allowed tools, checks, simplification rounds, spend caps and time limits. Randomize order within each pair, and alternate which result the maintainer reads first.
 3. **Run the follow-on.** Give a fresh agent each resulting checkout with the reserved maintenance request, using the same ordinary workflow for both. A reviewer who does not know the assignment judges both stages against the same contracts. A task succeeds only when the original behavior and the follow-on change pass, including the final review required for delivery.
 4. **Record every attempt.** Keep the records outside the checkout. For each attempt, record:
    - task, arm, budget, revisions and run IDs
@@ -30,5 +30,5 @@ For example, an assessment written by an older release can reach the commit step
    - no new serious defect or broken contract
    - no more than 10% higher median initial elapsed time, median time to a correct follow-on or total model spend
 
-   Report missing and censored observations. If they could reverse the decision, keep the current workflow.
-6. **Confirm before adopting.** Repeat on eight new real tasks in four scope-matched pairs, randomizing one task in each pair to each arm. At day 30, credit only shipped changes that still serve the requested outcome with no unresolved corrective work. Charge repairs to the original arm and report unknown exposure. Apply the thresholds from step 5. If the candidate passes, adopt it only for the kinds of tasks that benefited.
+   A zero denominator leaves the rate comparison inconclusive. Report missing and censored observations. If they could reverse the decision, keep the current workflow.
+6. **Confirm before adopting.** Repeat on eight new real tasks in four pairs matched on scope and preassigned value. Choose tasks of equal value within each pair before randomly assigning one to each arm. At day 30, credit only shipped changes that still serve the requested outcome with no unresolved corrective work. Charge repairs to the original arm and report unknown exposure. Apply the thresholds from step 5. If the candidate passes, adopt it only for the kinds of tasks that benefited.
