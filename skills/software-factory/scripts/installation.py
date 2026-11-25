@@ -15,7 +15,7 @@ from workspace import SKILL_RELEASE_PATHS, git, release_id, write_json
 
 
 DEFAULT_ORIGIN = "https://github.com/chris-nickerson/factory.git"
-SKILL_ENTRY = "scripts/skill-entry.md"
+LEGACY_STUB = "scripts/skill-entry.md"
 
 
 def git_environment():
@@ -80,18 +80,17 @@ def skill_links(current):
     return {name: current / path for name, path in SKILL_RELEASE_PATHS.items()}
 
 
-def is_managed_skill_directory(path, current, entry_digest):
+def is_managed_skill_directory(path, current, digests):
     links = skill_links(current)
     entry = path / "SKILL.md"
     return (
-        entry_digest
-        and path.is_dir()
+        path.is_dir()
         and not path.is_symlink()
         and {p.name for p in path.iterdir()} == {"SKILL.md", *links}
         and all(link_target(path / name) == str(target) for name, target in links.items())
         and entry.is_file()
         and not entry.is_symlink()
-        and hashlib.sha256(entry.read_bytes()).hexdigest() == entry_digest
+        and hashlib.sha256(entry.read_bytes()).hexdigest() in digests
     )
 
 
@@ -132,6 +131,7 @@ def read_installation(manifest, current):
     pending = saved.pop("pending_release", None)
     if pending and link_target(current) == pending["release"]:
         saved.update(previous=pending["previous"], commit=pending["commit"])
+        saved["previous_full_entry"] = pending.get("previous_full_entry", False)
     return saved
 
 
@@ -205,6 +205,7 @@ def install_release(
     current = root / "current"
     manifest = root / "installation.json"
     registration = saved.get("skill_entry", {})
+    digests = {registration.get("sha256"), registration.get("replacing")}
     destinations = {prefix / "bin/factory": current / "scripts/factory"}
     destinations.update({d / "software-factory": current for d in skills})
     if os.path.lexists(current) and (
@@ -222,7 +223,7 @@ def install_release(
         if not os.path.lexists(previous):
             continue
         if link_target(previous) != str(target) and not is_managed_skill_directory(
-            previous, current, registration.get("sha256")
+            previous, current, digests
         ):
             if detached:
                 continue
@@ -231,14 +232,14 @@ def install_release(
             if not os.path.lexists(link):
                 previous.rename(link)
             elif link_target(link) == str(target) or is_managed_skill_directory(
-                link, current, registration.get("sha256")
+                link, current, digests
             ):
                 discard_skill_transition(previous)
     for link, target in destinations.items():
         if not os.path.lexists(link) or link_target(link) == str(target):
             continue
         if link == default_skill and is_managed_skill_directory(
-            link, current, registration.get("sha256")
+            link, current, digests
         ):
             has_entry = True
         elif not detached:
@@ -311,9 +312,14 @@ def install_release(
             if probe.returncode:
                 raise ValueError(f"Factory CLI failed to start: {probe.stderr.strip()}")
             stage.rename(release)
+    installed_entry = (default_skill / "SKILL.md").read_bytes() if has_entry else None
+    previous_full_entry = bool(
+        has_entry and old and (Path(old) / "SKILL.md").read_bytes() == installed_entry
+    )
     configuration = dict(
         skill_dirs=list(map(str, skills)),
         previous=saved.get("previous"),
+        previous_full_entry=saved.get("previous_full_entry", False),
         commit=saved.get("commit"),
         update_origin=origin or saved.get("update_origin") or DEFAULT_ORIGIN,
     )
@@ -322,17 +328,22 @@ def install_release(
     entry = None
     had_link = False
     if default_skill in destinations:
-        template = release / SKILL_ENTRY
-        wants_entry = template.is_file()
+        template = release / "SKILL.md"
+        if rollback and not saved.get("previous_full_entry"):
+            template = release / LEGACY_STUB
         had_link = link_target(default_skill) == str(current)
         default_skill.parent.mkdir(parents=True, exist_ok=True)
-        if wants_entry and not has_entry:
-            entry = template.read_bytes()
-            configuration["skill_entry"] = {
-                "path": str(default_skill),
-                "sha256": hashlib.sha256(entry).hexdigest(),
-            }
-        elif not wants_entry and (has_entry or not had_link):
+        if template.is_file():
+            content = template.read_bytes()
+            digest = hashlib.sha256(content).hexdigest()
+            if installed_entry != content:
+                entry = content
+            configuration["skill_entry"] = {"path": str(default_skill), "sha256": digest}
+            if installed_entry is not None and entry is not None:
+                configuration["skill_entry"]["replacing"] = hashlib.sha256(
+                    installed_entry
+                ).hexdigest()
+        elif has_entry or not had_link:
             publish_default_skill(default_skill, current, None, replace=has_entry)
     for link, target in destinations.items():
         if link != default_skill and not link.is_symlink():
@@ -343,6 +354,7 @@ def install_release(
         configuration["pending_release"] = {
             "release": str(release),
             "previous": old,
+            "previous_full_entry": previous_full_entry,
             "commit": commit,
         }
     else:
@@ -350,10 +362,14 @@ def install_release(
     write_json(manifest, configuration)
     replace_link(current, release)
     if entry is not None:
-        publish_default_skill(default_skill, current, entry, replace=had_link)
-    if switching:
-        configuration.pop("pending_release")
-        configuration.update(previous=old, commit=commit)
+        publish_default_skill(default_skill, current, entry, replace=had_link or has_entry)
+    replaced_digest = configuration.get("skill_entry", {}).pop("replacing", None)
+    if replaced_digest or switching:
+        configuration.pop("pending_release", None)
+        if switching:
+            configuration.update(
+                previous=old, previous_full_entry=previous_full_entry, commit=commit
+            )
         write_json(manifest, configuration)
     return report
 
