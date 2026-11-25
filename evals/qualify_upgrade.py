@@ -21,9 +21,12 @@ proposal = "Keep the local contract.\\nSTATUS: RESOLUTION_PROPOSED"
 accept = "ACCEPT: turn_001_a.md\\nSTATUS: CONFIRMED"
 if Path(sys.argv[0]).name == "claude":
     key = "--resume" if "--resume" in args else "--session-id"
+    result = accept if key == "--resume" else proposal
+    if prompt.startswith("Assess the coordinator"):
+        result = "STATUS: VERIFIED"
     print(json.dumps(dict(
         subtype="success", session_id=args[args.index(key) + 1],
-        result=accept if key == "--resume" else proposal,
+        result=result,
         modelUsage={"claude-opus-fixture": {}},
     )))
 else:
@@ -36,6 +39,12 @@ else:
     ):
         print(json.dumps(event))
 """
+
+
+def evidence_result(report):
+    return (
+        report["run"], report["subject"], report["status"], report["claims"]["ready"]["status"]
+    )
 
 
 def qualify(baseline, home):
@@ -76,21 +85,50 @@ def qualify(baseline, home):
         started = run(cli, "start", "--repo", target, "--task", "Check readiness", "--contract", contract)
         return run(cli, "check", started["run"])
 
+    worktree = home / "checkout"
+    worktree.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=worktree, env=env, check=True, capture_output=True)
+
+    git("init", "-qb", "main")
+    git("config", "user.name", "Factory fixture")
+    git("config", "user.email", "fixture@example.invalid")
+    git("commit", "--allow-empty", "-qm", "Base")
+    git("switch", "-qc", "change")
+    (worktree / "answer.txt").write_text(source.read_text())
+    git("add", "answer.txt")
+    git("commit", "-qm", "Candidate")
+
     old_install = run(sys.executable, baseline / "install.py")
     old_entry = (skill / "SKILL.md").read_bytes()
     old_evidence = check_with_installed_cli()
     old_dialogue = run(cli, "consensus", "design", "--repo", target, "--task", "Choose a contract")
     if old_dialogue["status"] != "confirmed":
         raise RuntimeError(old_dialogue)
+    old_rounds = run(cli, "simplify", "--repo", worktree, "--base", "main",
+                     "--task", "Keep the answer ready", "--check", "grep -Fx ready answer.txt")
     before_upgrade = calls.read_bytes()
 
     new_install = run(sys.executable, ROOT / "install.py")
     if old_install["release"] == new_install["release"]:
         raise RuntimeError("Choose a baseline with a different installable payload")
     replayed = run(cli, "consensus", "resume", old_dialogue["run"])
-    if replayed != old_dialogue or calls.read_bytes() != before_upgrade:
+    decision_fields = ("run", "subject", "status", "proposal", "decision", "turns")
+    if (
+        any(replayed[field] != old_dialogue[field] for field in decision_fields)
+        or calls.read_bytes() != before_upgrade
+    ):
         raise RuntimeError("Resuming the old decision changed its result or dispatched a provider")
-    if run(cli, "status", old_evidence["run"]) != old_evidence:
+    for options in (("--status",), ()):
+        rounds = run(cli, "simplify", "--resume", old_rounds["id"], *options)
+        old_checkpoints = [(row["session_id"], row["output"]) for row in old_rounds["rounds"]]
+        checkpoints = [(row["session_id"], row["output"]) for row in rounds["rounds"]]
+        if rounds["status"] != "complete" or checkpoints != old_checkpoints:
+            raise RuntimeError("The upgrade changed the old simplification checkpoints")
+    if calls.read_bytes() != before_upgrade:
+        raise RuntimeError("Reading an old checkpoint dispatched a provider")
+    if evidence_result(run(cli, "status", old_evidence["run"])) != evidence_result(old_evidence):
         raise RuntimeError("The upgrade changed the old evidence result")
     source.write_text("changed\n")
     stale = run(cli, "status", old_evidence["run"], expected=2)
@@ -102,9 +140,9 @@ def qualify(baseline, home):
     rollback = run(sys.executable, ROOT / "install.py", "--rollback")
     if rollback["release"] != old_install["release"] or (skill / "SKILL.md").read_bytes() != old_entry:
         raise RuntimeError("Rollback did not restore the old release and skill entry")
-    if run(cli, "status", new_evidence["run"]) != new_evidence:
+    if evidence_result(run(cli, "status", new_evidence["run"])) != evidence_result(new_evidence):
         raise RuntimeError("The rollback executable could not read candidate-written evidence")
-    print("Verified old evidence, old consensus resume without redispatch, and installed rollback.")
+    print("Verified old evidence, consensus and simplification, and installed rollback.")
 
 
 def main():

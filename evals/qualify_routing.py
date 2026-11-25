@@ -108,7 +108,8 @@ def main():
         return dict(case=name, trial=trial, observed=observed, expected=expected,
                     cli_exit=result.returncode, passed=observed == expected)
 
-    jobs = [(name, trial) for name in args.case or CASES for trial in range(1, args.trials + 1)]
+    cases = dict.fromkeys(args.case or CASES)
+    jobs = [(name, trial) for name in cases for trial in range(1, args.trials + 1)]
     with ThreadPoolExecutor(max_workers=3) as pool:
         samples = list(pool.map(sample, jobs))
     report = dict(codex=version, model_requested=args.model, checkout_head=revision, samples=samples)

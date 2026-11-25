@@ -289,6 +289,8 @@ def consume_call(run, record, folder, recover):
 def check_candidate(run, record, folder):
     before, _ = candidate(run, folder)
     working_inputs = snapshot(run["repo"], follow_symlinks=False)
+    if rev(run["repo"], "HEAD") != record["input"]:
+        raise Pending("The checked-out revision changed before checks started.")
     record["checks"] = []
     n = uuid.uuid4().hex[:10]
     attempt = {"tree": before, "checks": record["checks"]}

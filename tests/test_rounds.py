@@ -688,6 +688,7 @@ class RoundsTests(unittest.TestCase):
         self.assertEqual(len(self.turns.read_text().splitlines()), 1)
 
     def test_checks_stop_if_head_moves_before_working_input_snapshot(self):
+        first = self.folder / "first-check-ran"
         later = self.folder / "later-check-ran"
         snapshot = rounds.snapshot
         head_moved = False
@@ -704,10 +705,12 @@ class RoundsTests(unittest.TestCase):
             patch.object(rounds, "snapshot", side_effect=move_head_before_snapshot),
         ):
             code, report = self.invoke(
-                *self.start, "--rounds", "1", "--check", shlex.join(["touch", str(later)])
+                *self.start[:-1], shlex.join(["touch", str(first)]),
+                "--rounds", "1", "--check", shlex.join(["touch", str(later)])
             )
         self.assertEqual(code, 2, report)
-        self.assertIn("candidate or its revision", report["error"])
+        self.assertIn("revision changed before checks started", report["error"])
+        self.assertFalse(first.exists())
         self.assertFalse(later.exists())
         self.assertEqual(len(self.turns.read_text().splitlines()), 1)
 

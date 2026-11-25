@@ -109,6 +109,7 @@ class UpdateTests(unittest.TestCase):
     def test_reports_the_commits_each_update_brings_in(self):
         first = self.update()
         self.assertIsNone(first["previous"])
+        subprocess.run(self.installer, capture_output=True, check=True)
         spec = self.source / "skills/software-factory/SKILL.md"
         for subject in ("Teach reviewers about retries", "Show what changed"):
             spec.write_text(subject)

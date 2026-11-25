@@ -375,7 +375,7 @@ def install_release(
             "previous_full_entry": has_entry and not (Path(old) / LEGACY_STUB).is_file(),
             "commit": commit,
         }
-    else:
+    elif commit is not None:
         configuration["commit"] = commit
     write_json(manifest, configuration)
     replace_link(current, release)
