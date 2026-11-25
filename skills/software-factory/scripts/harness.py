@@ -267,9 +267,8 @@ class Codex:
 
 
 def _family_member(catalog, family):
-    if any(model["slug"] == family for model in catalog):
-        return family
-    listed = sorted(
+    """Return the current model for a family, or the model with that exact name."""
+    current = sorted(
         (
             model
             for model in catalog
@@ -277,9 +276,18 @@ def _family_member(catalog, family):
         ),
         key=lambda model: model["priority"],
     )
-    for model in listed:
-        if family.lower() in model["slug"].lower().replace(".", "-").split("-"):
-            return model["slug"]
+    in_family = [
+        model["slug"]
+        for model in current
+        if family.lower() in _name_parts(model["slug"])
+    ]
+    for candidates in (
+        [model["slug"] for model in current if model["slug"] == family],
+        in_family,
+        [model["slug"] for model in catalog if model["slug"] == family],
+    ):
+        if candidates:
+            return candidates[0]
     raise HarnessError(
         f"The Codex catalog lists no model in the {family!r} family. "
         "Run `codex debug models` to see the current names."

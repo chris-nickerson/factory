@@ -9,8 +9,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# A request that names a model has no tier to choose, so the tier is unscored.
-MODEL_NAMED_BY_USER = None
+# A request that names a model has no tier to choose. Its role spec is scored.
+MODEL_NAMED_BY_USER = "opus"
 CASES = {
     "checks": (
         "Use Software Factory to check the parser behavior I specify. I only want local checks and no review.",
@@ -70,8 +70,13 @@ SCHEMA = {
             "enum": ["role default", "frontier", "standard"],
             "description": "The model tier you would pass to the procedure's command.",
         },
+        "role_spec": {
+            "type": "string",
+            "description": "The role flag and value you would pass to choose a "
+            "harness or model, such as --simplifier claude:opus. Empty if none.",
+        },
     },
-    "required": ["skill", "procedure", "publish", "tier"],
+    "required": ["skill", "procedure", "publish", "tier", "role_spec"],
     "additionalProperties": False,
 }
 
@@ -139,8 +144,8 @@ def main():
                 stderr=errors,
                 input=(
                     "Read the request as a coding agent in this project. Select the installed skill and procedure "
-                    "you would use. Report whether the latest request authorizes publication and "
-                    "which model tier you would pass. "
+                    "you would use. Report whether the latest request authorizes publication, "
+                    "which model tier you would pass, and any role flag you would pass. "
                     "Read any guidance you need, and stop before running the selected procedure.\n\n"
                     + prompt
                 ),
@@ -154,12 +159,15 @@ def main():
             skill="software-factory", procedure=route, publish=publish,
             tier=tier[0] if tier else "role default",
         )
-        if expected["tier"] is MODEL_NAMED_BY_USER:
+        role_spec = (observed or {}).pop("role_spec", "")
+        named_model_kept = True
+        if expected["tier"] == MODEL_NAMED_BY_USER:
             del expected["tier"]
-            if observed:
-                observed.pop("tier", None)
+            (observed or {}).pop("tier", None)
+            named_model_kept = MODEL_NAMED_BY_USER in role_spec.lower()
         return dict(case=name, trial=trial, observed=observed, expected=expected,
-                    cli_exit=result.returncode, passed=observed == expected)
+                    role_spec=role_spec, cli_exit=result.returncode,
+                    passed=observed == expected and named_model_kept)
 
     cases = dict.fromkeys(args.case or CASES)
     jobs = [(name, trial) for name in cases for trial in range(1, args.trials + 1)]

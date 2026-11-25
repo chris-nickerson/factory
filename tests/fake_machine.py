@@ -19,6 +19,13 @@ RETIRED_ASTRA = {
     "upgrade": {"retirement_at": "2020-01-01T00:00:00"},
 }
 OLDER_ASTRA = {"slug": "gpt-9.1-astra", "visibility": "list", "priority": 6}
+RETIRED_NAMED_LIKE_ITS_FAMILY = {
+    "slug": "luna",
+    "visibility": "hide",
+    "priority": 0,
+    "upgrade": {"retirement_at": "2020-01-01T00:00:00Z"},
+}
+CURRENT_LUNA = {"slug": "gpt-9-luna", "visibility": "list", "priority": 7}
 UNHYPHENATED = {"slug": "o9", "visibility": "list", "priority": 9}
 UNHYPHENATED_SIBLING = {"slug": "o9-pro", "visibility": "list", "priority": 8}
 CATALOG = [
@@ -29,6 +36,8 @@ CATALOG = [
     OLDER_ASTRA,
     UNHYPHENATED,
     UNHYPHENATED_SIBLING,
+    RETIRED_NAMED_LIKE_ITS_FAMILY,
+    CURRENT_LUNA,
 ]
 
 

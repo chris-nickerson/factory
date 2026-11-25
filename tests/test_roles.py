@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fake_machine  # noqa: E402
 from fake_machine import use_machine  # noqa: E402
 import harness  # noqa: E402
 import roles  # noqa: E402
@@ -92,6 +93,16 @@ class RoleTests(unittest.TestCase):
         (self.repo / roles.PROJECT_FILE).write_bytes(b"[roles]\nreviewer = \"\xff\"\n")
         self.assertEqual(self.reviewer()["harness"], "codex")
 
+    def test_report_names_the_login_a_chosen_harness_still_needs(self):
+        use_machine(self, "codex", "claude")
+        signed_out = fake_machine.harnesses("codex", "claude")
+        signed_out["claude"].update(authenticated=False, available=False)
+        self.configure('[roles]\nreviewer = "claude:default"\n')
+        with patch.object(roles, "installed", lambda: signed_out):
+            row = roles.report(roles.Policy(self.repo))["roles"]["reviewer"]
+        self.assertEqual(row["status"], "SIGNED_OUT")
+        self.assertIn("claude auth login", row["reason"])
+
     def test_no_harness_leaves_a_role_unfilled_with_a_next_step(self):
         use_machine(self)
         with self.assertRaisesRegex(roles.RoleError, "factory doctor"):
@@ -175,6 +186,7 @@ class RoleTests(unittest.TestCase):
         self.assertEqual(model("codex:astra"), "gpt-9.2-astra")
         self.assertEqual(model("codex:gpt-9.1-astra"), "gpt-9.1-astra")
         self.assertEqual(model("codex:o9"), "o9")
+        self.assertEqual(model("codex:luna"), "gpt-9-luna")
         with self.assertRaisesRegex(roles.RoleError, "'high' family"):
             model("codex:high")
 

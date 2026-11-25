@@ -20,7 +20,7 @@ The report shows:
 
 - `host`: the harness whose session is running Factory, and the evidence for it.
 - `harnesses`: each supported CLI, whether it is installed and signed in, and what it can do.
-- `roles`: for each role, the harness, the model argument Factory will pass, where the choice came from, and any reduced assurance.
+- `roles`: for each role, the harness, the model argument Factory will pass, where the choice came from, and any reduced assurance. `SIGNED_OUT` means the chosen harness needs a login before the role can run.
 
 A login check cannot prove model access. The first live turn does.
 

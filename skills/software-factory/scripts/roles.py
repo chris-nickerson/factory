@@ -6,6 +6,7 @@ reduces. Callers resolve a binding once, save it with the run and reuse the
 saved binding on resume.
 """
 
+import fcntl
 from functools import cached_property
 import hashlib
 import json
@@ -156,9 +157,12 @@ def approve_project(repo):
             (approval or {}).get("reason")
             or f"{Path(repo) / PROJECT_FILE} has no [roles] or [models] table."
         )
-    approved = {**_approvals(), str(Path(repo).resolve()): approval["digest"]}
     state_root().mkdir(mode=0o700, parents=True, exist_ok=True)
-    write_json(state_root() / "approved-projects.json", approved)
+    with (state_root() / "approved-projects.lock").open("a") as lock:
+        # Two approvals at once must each keep the other's entry.
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        approved = {**_approvals(), str(Path(repo).resolve()): approval["digest"]}
+        write_json(state_root() / "approved-projects.json", approved)
 
 
 def detect_host(environ=None, ancestors=None):
@@ -458,6 +462,13 @@ def report(policy, writer=None):
                     **binding,
                     "summary": describe(binding),
                 }
+                adapter = ADAPTERS[binding["harness"]]
+                if not policy.harnesses[adapter.name]["authenticated"]:
+                    rows[role].update(
+                        status="SIGNED_OUT",
+                        reason=f"{adapter.title} is not signed in. "
+                        f"Run `{adapter.login}`.",
+                    )
         except RoleError as error:
             for role in names:
                 rows[role] = {"status": "UNFILLED", "reason": str(error)}

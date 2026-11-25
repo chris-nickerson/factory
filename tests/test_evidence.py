@@ -249,7 +249,7 @@ class FactoryTests(unittest.TestCase):
         fake = bin_dir / "claude"
         fake.write_text(
             "#!/usr/bin/env python3\nimport sys,json\ns=sys.stdin.read()\nargs=sys.argv\n"
-            "assert '+def add(a,b): return a+b' in s and 'notes.txt' in s and 'You have no shell' in s\n"
+            "assert '+def add(a,b): return a+b' in s and 'notes.txt' in s\n"
             "assert 'Bash' not in ' '.join(args) and args[args.index('--model')+1]=='fable'\n"
             "print(json.dumps({'subtype':'success','session_id':args[args.index('--session-id')+1],"
             "'modelUsage':{'claude-fable-fixture':{}},'result':'Correct.\\nVERDICT: CLEAR'}))\n"

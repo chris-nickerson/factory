@@ -187,6 +187,21 @@ class RoundsTests(unittest.TestCase):
         self.assertEqual([r["mode"] for r in records], ["auto", "dontAsk"])
         self.assertEqual(rounds.last_writer(self.repo), ("claude", result["run"]))
 
+    def test_resume_refuses_an_old_receipt_whose_reported_model_differs(self):
+        code, result = self.invoke(*self.start, "--rounds", "1")
+        self.assertEqual(code, 0, result)
+        folder = rounds.work_root() / result["id"]
+        run = json.loads((folder / "state.json").read_text())
+        record = run["rounds"][0]
+        receipt = folder / record["calls"][-1]["name"] / "receipt.json"
+        saved = json.loads(receipt.read_text())
+        del saved["model_identity"]
+        saved["model_usage"] = ["claude-sonnet-fixture"]
+        receipt.write_text(json.dumps(saved))
+        record["phase"] = "calling"
+        with self.assertRaisesRegex(RuntimeError, "not the requested opus"):
+            rounds.consume_call(run, record, folder, recover=False)
+
     def test_recover_rejected_subject_with_rewriting_hook_and_trailer(self):
         hook = self.repo / ".git/hooks/commit-msg"
         hook.write_text(

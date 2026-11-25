@@ -24,7 +24,7 @@ from checkpoints import (
     qualify_legacy_checkouts,
     rev,
 )
-from harness import run_turn
+from harness import model_identity, run_turn
 import roles
 from supervision import captured_check, turn_stopped
 from workspace import (
@@ -187,8 +187,8 @@ def call_context(run, record, folder):
                 record["input"],
             )
         )
-    # The restricted file tools cannot read our private state directory, so the
-    # harness delivers this context beside the prompt, whatever its size.
+    # The harness delivers this context separately from the prompt. Each adapter
+    # chooses how, because the diff can exceed the size of one argument.
     delta = diff.read_text(encoding="utf-8", errors="replace")
     tools = (
         "Use local Bash for inspection and repository tests as needed. Keep temporary test output "
@@ -310,6 +310,9 @@ def consume_call(run, record, folder, recover):
         raise Pending("The simplifier session changed within a round.")
     if any(old.get("session_id") == session for old in run["rounds"][:-1]):
         raise Pending("The simplifier reused a previous round's context.")
+    harness_compared_models = "model_identity" in receipt
+    if not harness_compared_models:
+        model_identity(receipt, receipt)
     record.update(session_id=session, model_reported=receipt.get("model_reported"))
     text = receipt["text"].strip()
     if call["kind"] == "assess":
