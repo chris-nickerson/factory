@@ -99,12 +99,18 @@ class FactoryTests(unittest.TestCase):
             dict(id=key, expect="command succeeds", argv=[sys.executable, "-c", "pass"])
             for key in ("first", "second")
         ]
+        ready = self.home / "service-ready"
+        claims[1]["argv"] = ["test", "-f", str(ready)]
         run = self.start(claims, extra=("--require-review",))
         partial = self.cli("check", run, "--claim", "first", code=2)
+        failed = self.cli("check", run, "--remaining", code=1)
+        self.assertEqual(failed["claims"]["second"]["status"], "FAIL")
+        self.assertEqual(failed["claims"]["first"], partial["claims"]["first"])
+        ready.touch()
         resumed = self.cli("check", run, "--remaining", code=2)
         self.assertEqual(resumed["claims"]["first"], partial["claims"]["first"])
         self.assertEqual(resumed["claims"]["second"]["status"], "PASS")
-        self.assertEqual(self.cli("check", run, "--remaining", code=2), resumed)
+        self.assertEqual(self.cli("check", run, "--remaining", code=2)["claims"], resumed["claims"])
 
         first_log = resumed["claims"]["first"]["latest"]["log"]
         (Path(resumed["artifacts"]) / first_log).unlink()
