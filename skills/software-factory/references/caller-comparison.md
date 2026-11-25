@@ -28,20 +28,20 @@ Run each of the four tasks in both arms, on separate copies of the same revision
 3. Run the hidden follow-on check and replay the original check on the modified checkout.
 4. A reviewer blind to assignment judges both stages against the frozen contracts. Credit each task once per arm only if both stages and the required delivery reviews pass within budget. Either copy can earn pilot credit without shipping.
 
-Keep one record per attempt outside the checkout. Include the task, arm, budget, revisions, run IDs, owner minutes by activity, interruptions, elapsed time per stage, time to a correct follow-on, unique defects and repair cycles. Use the harness session IDs in the run receipts to attribute tokens from the CLI usage logs and dollars from billing or a common dated price schedule. Include failed runs, retries, timeouts and reverts in time and spend. Mark unavailable usage and censored times explicitly.
+Keep one record per attempt outside the checkout. Include the task, arm, budget, revisions, run IDs, owner minutes by activity, interruptions, elapsed time per stage, time to a correct follow-on, unique defects and repair cycles. Count all model calls, including failures and retries. Identify author and maintenance sessions from host logs and Factory-launched sessions from receipts. Use CLI usage logs and provider billing or a common dated price schedule. Include failed runs, retries, timeouts and reverts in time and spend. Mark unavailable usage and censored times explicitly.
 
 ## Decide whether to advance
 
-Compare total credited value divided by all owner hours in each arm. Keep the current workflow unless the candidate meets every threshold:
+Compare total credited value divided by all owner hours in each arm. Advance to field confirmation only if the candidate meets every threshold:
 
 - At least 20% more credited value per owner hour and fewer owner minutes on at least three of four pairs.
 - At least as many successful tasks and no new serious defect or broken contract.
 - At most 10% higher median initial elapsed time, median time to a correct follow-on and total model spend. Apply the 10% limit to owner minutes on the routine edit as well.
 
-Four pairs screen for an effect. If ordinary variation could explain the gain, stop with an inconclusive result. A further trial needs fresh pairs and a new contract. If either arm records zero owner hours or the baseline arm earns zero value, the percentage gain is undefined. Keep the current workflow in that case or when missing observations could reverse the decision.
+Four pairs screen for an effect. Check sensitivity to task mix by recomputing the value-per-hour gain four times, omitting one pair at a time. If any estimate is undefined or loses the direction of the gain, stop with an inconclusive result. This small screen does not estimate run-to-run noise. A further trial needs fresh pairs and a new contract. If either arm records zero owner hours or the baseline arm earns zero value, the percentage gain is undefined. Keep the current workflow in that case or when missing observations could reverse the decision.
 
 ## Confirm on shipped work
 
 Enroll eight new real tasks, one pair for each of the four task types. Match the tasks within each pair on scope and preassigned value, then randomly assign one to each arm. Run each task once. Use the same setup, blinding, budgets, acceptance checks and attempt records as the pilot. Run the follow-on stage on an isolated copy of each delivered revision.
 
-Thirty days after each change ships, credit its value only if both stages passed and the shipped change still serves its requested outcome with no unresolved corrective work. Unshipped tasks earn zero at the agreed delivery deadline. Charge repair effort to its original arm and report unknown exposure. Apply the pilot thresholds to these four new pairs. If they pass, adopt only for enrolled task types whose candidate succeeded and used fewer owner minutes than its baseline task. Treat this as a scoped rollout and keep recording later outcomes.
+Thirty days after each change ships, credit its value only if both stages passed and the shipped change still serves its requested outcome with no unresolved corrective work. Unshipped tasks earn zero at the agreed delivery deadline. Charge repair effort to its original arm and report unknown exposure. Apply the entire decision rule above, including its sensitivity check and inconclusive outcomes, to these four new pairs. If they pass, adopt only for enrolled task types whose candidate succeeded and used fewer owner minutes than its baseline task. Treat this as a scoped rollout and keep recording later outcomes.
