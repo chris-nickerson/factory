@@ -9,6 +9,14 @@ Use the executable at `scripts/factory` relative to this skill's real directory,
 
 On hosts without the provider CLIs, use `factory doctor --profile local` and the [local evidence workflow](references/local.md). Independent review requires Codex; simplification requires Claude Code; consensus requires both.
 
+## Carry the request into execution
+
+For each ordinary request, use the conversation to form a working brief before choosing a workflow. Keep the user's words when they already give the executing agent enough to act. Resolve references and corrections, carrying forward requirements the correction leaves in place. State what the user wants to receive, what actions they authorize, the constraints and where work should stop. Include context a fresh agent would otherwise lose. Distinguish observations, hypotheses, requirements and delegated decisions. Preserve exact errors, public contracts and explicit limits.
+
+Add detail only when it helps the agent act or judge success. Ground consequential instructions in the request, applicable repository instructions, verified constraints or a genuine task dependency. Leave open implementation choices open. Point to the available evidence that can settle a material uncertainty and choose a check proportionate to the outcome. Ask only when the remaining decision needs the user's judgment.
+
+Use the brief to select the workflow and guide your own next actions. Pass the relevant brief to each executing agent. For `factory start`, `consensus` and `simplify`, use the existing `--task` argument. Simplification supplies it as context alongside the versioned prompt. Keep the brief internal and proceed through the user's stopping point without a prompt-writing or approval exchange. If the user steers the work, the conversation governs. Update affected instructions before further actions or handoffs. If an existing frozen task or check conflicts with the correction, stop using it and start a newly scoped run when needed.
+
 | User's request | Entry |
 | --- | --- |
 | Diagnose or decide independently with a second model | Use `factory consensus`. [Consensus procedure](references/consensus.md) |
