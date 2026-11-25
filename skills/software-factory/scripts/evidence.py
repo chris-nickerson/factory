@@ -388,26 +388,24 @@ def review(args):
             if model:
                 raise ValueError("Give the reviewer's model once, in --reviewer.")
             spec = f"{harness or ''}:{args.model}"
-        policy = roles.Policy(repo)
-        writer = review_writer(repo, policy)
-        binding = roles.reviewer(policy, explicit=spec, writer=writer)
+        receipt = dict(subject=subject, base=base, paths=paths, status="PENDING")
+        data["reviews"].append(receipt)
+        write_json(folder / "state.json", data)
+        try:
+            policy = roles.Policy(repo)
+            writer = review_writer(repo, policy)
+            binding = roles.reviewer(policy, explicit=spec, writer=writer)
+        except roles.RoleError as error:
+            receipt.update(status="BLOCKED", reason=str(error))
+            write_json(folder / "state.json", data)
+            return summary(folder, data, snapshot(repo))
+        receipt.update(reviewer=binding, writer=writer, host=policy.host)
         reviewer_runs_git = (
             "read_only_shell" in ADAPTERS[binding["harness"]].capabilities
         )
         if not reviewer_runs_git:
             staged = diff("--patch", "--cached", base)
             unstaged = diff("--patch")
-        receipt = dict(
-            subject=subject,
-            base=base,
-            paths=paths,
-            status="PENDING",
-            reviewer=binding,
-            writer=writer,
-            host=policy.host,
-        )
-        data["reviews"].append(receipt)
-        write_json(folder / "state.json", data)
         if (
             not reviewer_runs_git
             and len(staged) + len(unstaged) > EMBEDDED_DIFF_MAX_CHARS

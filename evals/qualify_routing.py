@@ -3,6 +3,7 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -164,7 +165,11 @@ def main():
         if expected["tier"] == MODEL_NAMED_BY_USER:
             del expected["tier"]
             (observed or {}).pop("tier", None)
-            named_model_kept = MODEL_NAMED_BY_USER in role_spec.lower()
+            named_model_kept = bool(
+                re.fullmatch(
+                    rf"--simplifier[ =](claude)?:{MODEL_NAMED_BY_USER}", role_spec.strip()
+                )
+            )
         return dict(case=name, trial=trial, observed=observed, expected=expected,
                     role_spec=role_spec, cli_exit=result.returncode,
                     passed=observed == expected and named_model_kept)

@@ -316,7 +316,8 @@ def turn_capabilities(edit, local_shell):
 
 
 def _name_parts(model):
-    return re.split(r"[-.]", model.lower())
+    """Split a model name into parts, leaving out a bracketed option."""
+    return re.split(r"[-.]", model.split("[")[0].lower())
 
 
 def _within(parts, name):
@@ -345,7 +346,7 @@ def model_identity(record, result):
         return "unreported"
     if not requested:
         return "unrequested"
-    wanted = _name_parts(requested.split("[")[0])
+    wanted = _name_parts(requested)
     names = [_name_parts(name) for name in reported]
     if any(_within(wanted, name) for name in names):
         return "matched" if len(reported) == 1 else "indeterminate"

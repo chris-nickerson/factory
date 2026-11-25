@@ -242,6 +242,8 @@ class FactoryTests(unittest.TestCase):
 
     def test_reviewer_without_a_shell_reads_the_diffs_and_states_the_reduction(self):
         run = self.start(extra=("--require-review",))
+        (self.repo / "maths.py").write_text("def add(a,b): return 123\n")
+        self.git("add", "maths.py")
         (self.repo / "maths.py").write_text("def add(a,b): return a+b\n")
         (self.repo / "notes.txt").write_text("new")
         bin_dir = self.home / "bin"
@@ -249,7 +251,7 @@ class FactoryTests(unittest.TestCase):
         fake = bin_dir / "claude"
         fake.write_text(
             "#!/usr/bin/env python3\nimport sys,json\ns=sys.stdin.read()\nargs=sys.argv\n"
-            "assert '+def add(a,b): return a+b' in s and 'notes.txt' in s\n"
+            "assert '+def add(a,b): return 123' in s and '+def add(a,b): return a+b' in s and 'notes.txt' in s\n"
             "assert 'Bash' not in ' '.join(args) and args[args.index('--model')+1]=='fable'\n"
             "print(json.dumps({'subtype':'success','session_id':args[args.index('--session-id')+1],"
             "'modelUsage':{'claude-fable-fixture':{}},'result':'Correct.\\nVERDICT: CLEAR'}))\n"
@@ -266,6 +268,35 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(receipt["model_reported"], "claude-fable-fixture")
         self.assertEqual(receipt["model_identity"], "matched")
         self.assertEqual(self.cli("status", run)["review_reductions"], report["review_reductions"])
+
+    def test_review_that_cannot_find_a_reviewer_replaces_an_earlier_clear(self):
+        run = self.start(extra=("--require-review",))
+        (self.repo / "maths.py").write_text("def add(a,b): return a+b\n")
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "codex"
+        fake.write_text(
+            "#!/usr/bin/env python3\nimport json,uuid\n"
+            "for event in [{'type':'thread.started','thread_id':str(uuid.uuid4())},"
+            "{'type':'item.completed','item':{'type':'agent_message','text':'Fine.\\nVERDICT: CLEAR'}},"
+            "{'type':'turn.completed'}]: print(json.dumps(event))\n"
+        )
+        fake.chmod(0o755)
+        path = self.env["PATH"]
+        self.env["PATH"] = str(bin_dir) + os.pathsep + path
+        self.cli("check", run, code=2)
+        self.assertEqual(
+            self.cli("review", run, "--reviewer", "codex:default")["review"], "CLEAR"
+        )
+        fake.unlink()
+        git_only = self.home / "git-only"
+        git_only.mkdir()
+        (git_only / "git").symlink_to(shutil.which("git"))
+        (git_only / "python3").symlink_to(sys.executable)
+        self.env["PATH"] = str(git_only)
+        blocked = self.cli("review", run, code=2)
+        self.assertEqual((blocked["status"], blocked["review"]), ("INCOMPLETE", "BLOCKED"))
+        self.assertIn("No installed", blocked["review_receipt"]["reason"])
 
     def test_review_receipt_from_the_previous_release_still_gates(self):
         run = self.start(extra=("--require-review",))

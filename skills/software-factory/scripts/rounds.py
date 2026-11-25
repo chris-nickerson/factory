@@ -187,8 +187,9 @@ def call_context(run, record, folder):
                 record["input"],
             )
         )
-    # The harness delivers this context separately from the prompt. Each adapter
-    # chooses how, because the diff can exceed the size of one argument.
+    # Claude's restricted file tools cannot read our private state directory, so
+    # the harness delivers this context itself. Each adapter chooses how, because
+    # the diff can exceed the size of one argument.
     delta = diff.read_text(encoding="utf-8", errors="replace")
     tools = (
         "Use local Bash for inspection and repository tests as needed. Keep temporary test output "

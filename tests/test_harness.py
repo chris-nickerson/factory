@@ -167,6 +167,12 @@ class HarnessTests(unittest.TestCase):
     def test_receipt_says_how_far_model_identity_was_established(self):
         self.assertEqual(self.turn()["model_identity"], "matched")
         self.assertEqual(self.turn(model="opus[1m]")["model_identity"], "matched")
+        from harness import model_identity
+
+        bracketed = {"model_requested": "claude-opus-4[1m]"}
+        self.assertEqual(
+            model_identity(bracketed, {"model_usage": ["claude-opus-4[1m]"]}), "matched"
+        )
         pinned = self.turn(model="claude-opus-fixture-20260101")
         self.assertEqual(pinned["model_identity"], "indeterminate")
         self.assertEqual(self.turn(selector="standard")["model_selector"], "standard")

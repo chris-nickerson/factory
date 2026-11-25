@@ -109,11 +109,12 @@ def _tables(path, keys=("roles", "models")):
             if (
                 harness not in ADAPTERS
                 or not isinstance(families, dict)
+                or set(families) - set(TIERS)
                 or not all(isinstance(name, str) and name for name in families.values())
             ):
                 raise RoleError(
-                    f"[models.{harness}] must map a tier to a model name for a "
-                    "supported harness"
+                    f"[models.{harness}] must map {' or '.join(TIERS)} to a model "
+                    "name for a supported harness"
                 )
     except (RoleError, AttributeError, TypeError) as error:
         raise RoleError(f"{path}: {error}") from error
@@ -362,6 +363,17 @@ def bind_model(binding, policy):
         if selector not in TIERS:
             # The caller wrote this name, so the harness can accept or refuse it.
             return {**binding, "model": selector, "family": None}
+        if binding["model_source"] == "default":
+            return {
+                **binding,
+                "model": None,
+                "family": None,
+                "reductions": [
+                    *binding["reductions"],
+                    f"{ADAPTERS[harness].title} could not list its models, so this "
+                    f"role uses the harness default model, not the {selector} tier.",
+                ],
+            }
         raise RoleError(
             f"{error} To proceed without the catalog, set the {binding['role']} "
             f"role to {harness}:{HARNESS_DEFAULT} or name a complete model."
@@ -390,17 +402,17 @@ def reviewer(policy, *, explicit=None, writer=None):
         policy,
     )
     if binding["vendor"] == writer.get("vendor"):
-        binding["reductions"] = [
+        binding["reductions"].append(
             f"The reviewer shares a vendor with {writer['description']}, "
             "so the review is less independent."
-        ]
+        )
     elif not writer:
         vendors = {ADAPTERS[name].vendor for name in policy.candidates("reviewer")}
         if len(vendors) == 1:
-            binding["reductions"] = [
+            binding["reductions"].append(
                 "Only one vendor's harness is available and Factory cannot tell "
                 "who wrote the change, so the reviewer's independence is unverified."
-            ]
+            )
     return binding
 
 
@@ -437,13 +449,17 @@ def consensus_pair(policy, *, a=None, b=None, harness_models=None):
     first, second = pair["a"], pair["b"]
     if first["harness"] != second["harness"] or first["model"] != second["model"]:
         if first["vendor"] == second["vendor"]:
-            second["reductions"] = ["Both consensus participants come from one vendor."]
+            second["reductions"].append(
+                "Both consensus participants come from one vendor."
+            )
     elif "reports_model" in ADAPTERS[first["harness"]].capabilities:
-        second["reductions"] = [
+        second["reductions"].append(
             "Same-model consensus: both participants use one harness and model."
-        ]
+        )
     else:
-        second["reductions"] = ["Same-harness consensus: model diversity is unverified."]
+        second["reductions"].append(
+            "Same-harness consensus: model diversity is unverified."
+        )
     return pair
 
 

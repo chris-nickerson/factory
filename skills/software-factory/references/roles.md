@@ -72,7 +72,7 @@ factory simplify --tier frontier --rounds 3 --base trunk --task '...' --check '.
 factory review RUN_ID --tier standard
 ```
 
-The [built-in policy](../scripts/defaults.toml) maps each tier to a model family for each harness. Factory's code names no model. Claude Code accepts a family name directly. Codex accepts only complete model names, so Factory asks `codex debug models` which listed model currently carries the family. If the catalog is unavailable, a tier cannot be resolved. Set the role to `codex:default` or name a model yourself, which Factory then passes to Codex as written.
+The [built-in policy](../scripts/defaults.toml) maps each tier to a model family for each harness. Factory's code names no model. Claude Code accepts a family name directly. Codex accepts only complete model names, so Factory asks `codex debug models` which listed model currently carries the family. If the catalog is unavailable, a default role uses Codex's own default model and reports the reduction. A tier you asked for by name fails with the choice to make: set the role to `codex:default`, or name a model yourself, which Factory passes to Codex as written.
 
 ## Set your own defaults
 
@@ -119,6 +119,7 @@ With one harness, Factory still fills every role. It states what the result is w
 | Same-model consensus | Both participants use one harness and model. Agreement shows consistency between two sessions. |
 | Same-harness consensus, model diversity unverified | Both participants use one harness that does not report its model. |
 | Both consensus participants come from one vendor | The participants use different models from the same vendor. |
+| The role uses the harness default model | The harness could not list its models, so Factory could not resolve the role's default tier. |
 
 A reduction appears in the `reductions` field of the role report, in a review's `review_reductions` and receipt, and in a consensus result. A reduced review still satisfies `--require-review`. Report each reduction to the user with the result. If the user requires an independent vendor, install and sign in to a second harness, then rerun the step.
 

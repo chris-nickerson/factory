@@ -196,7 +196,10 @@ class RoleTests(unittest.TestCase):
         self.assertEqual(self.reviewer(explicit="codex:gpt-x")["model"], "gpt-x")
         self.assertEqual(self.reviewer(explicit="codex:o9")["model"], "o9")
         with self.assertRaisesRegex(roles.RoleError, "codex:default"):
-            self.reviewer()
+            self.reviewer(explicit=":frontier")
+        fallback = self.reviewer(writer=CLAUDE_WROTE)
+        self.assertIsNone(fallback["model"])
+        self.assertIn("harness default model", fallback["reductions"][0])
 
     def test_consensus_participants_move_apart_when_one_is_chosen(self):
         use_machine(self, "codex", "claude")
@@ -211,7 +214,7 @@ class RoleTests(unittest.TestCase):
         same = self.pair(a="claude:standard", b="claude:opus")
         self.assertIn("Same-model consensus", same[1][2][0])
         mixed = self.pair(a="claude:fable", b="claude:opus")
-        self.assertEqual(mixed[1][2], ["Both consensus participants come from one vendor."])
+        self.assertIn("one vendor", mixed[1][2][0])
 
     def test_model_flags_from_before_roles_follow_their_harness(self):
         use_machine(self, "codex", "claude")
@@ -238,6 +241,7 @@ class RoleTests(unittest.TestCase):
             ('[roles]\nreviewr = "codex"\n', "reviewr"),
             ('[roles]\nreviewer = "gemini"\n', "gemini"),
             ('[models]\nclaude = "opus"\n', r"\[models.claude\]"),
+            ('[models.claude]\nfrontir = "x"\n', r"\[models.claude\]"),
         ):
             with self.subTest(text):
                 self.configure(text)
