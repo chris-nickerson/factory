@@ -263,7 +263,7 @@ def install_release(
         elif not detached:
             raise ValueError(f"Path already owned by another installation: {link}")
     old = link_target(current)
-    retry = saved.get("pending_release")
+    interrupted_rollback = saved.get("pending_release")
     if rollback:
         new = saved.get("previous")
         commit = saved.get("previous_commit")
@@ -364,8 +364,8 @@ def install_release(
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to(target)
     switching = old and old != str(release)
-    if retry:
-        configuration["pending_release"] = retry
+    if interrupted_rollback:
+        configuration["pending_release"] = interrupted_rollback
     elif switching:
         configuration["pending_release"] = {
             "action": "rollback" if rollback else "install",
