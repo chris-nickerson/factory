@@ -26,6 +26,12 @@ CASES = {
         "The draft PR links to it. What has run, and do we have a screenshot?",
         "full delivery", True,
     ),
+    "delivery-local-recording": (
+        "Deliver the agreed PR with a recording reviewers can watch. Design, simplification, "
+        "final checks, independent review and CI finished. The PR is ready. You inspected "
+        "the recording of the changed screen locally. The PR only links to a file on your laptop.",
+        "full delivery", True,
+    ),
     "delivery-ready": (
         "Deliver the agreed review-ready PR and stop for human review. Design was confirmed; "
         "all requested rounds finished. The checks and independent review passed on the "
@@ -104,13 +110,14 @@ SCHEMA = {
 DELIVERY_DECISIONS = {
     "delivery-start": ("obtain design consensus", False),
     "delivery-pending": ("continue verification", False),
+    "delivery-local-recording": ("publish UI evidence", True),
     "delivery-ready": ("hand off to human", True),
 }
 DELIVERY_SCHEMA = {
     **SCHEMA,
     "properties": {
         **SCHEMA["properties"],
-        "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "hand off to human"]},
+        "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "publish UI evidence", "answer status and stop", "hand off to human"]},
         "ui_evidence_available": {"type": "boolean", "description": "The requested screen has been demonstrated."},
     },
     "required": [*SCHEMA["required"], "next_action", "ui_evidence_available"],
