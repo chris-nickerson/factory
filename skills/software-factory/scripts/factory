@@ -21,7 +21,7 @@ def main():
     import doctor
     import evidence
     import rounds
-    from installation import update
+    from installation import render_update, update
     from workspace import inspect, repo_root
 
     parser = argparse.ArgumentParser(
@@ -52,32 +52,54 @@ def main():
 
     scan.set_defaults(action=discover)
 
-    sub.add_parser(
+    upgrade = sub.add_parser(
         "update", help="Install the latest Factory from its origin's main branch"
-    ).set_defaults(action=update)
+    )
+    upgrade.add_argument(
+        "--json", action="store_true", help="Print a machine-readable report"
+    )
+    upgrade.set_defaults(action=update, render=render_update)
     doctor.register(sub)
     evidence.register(sub)
 
     dialogue.register(sub)
     rounds.register(sub)
     args = parser.parse_args()
+    pretty = hasattr(args, "render") and not args.json and sys.stdout.isatty()
+    color = pretty and not os.environ.get("NO_COLOR")
+    if pretty and sys.stderr.isatty():
+        args.progress = lambda text: print(
+            f"\r\033[K  {text}…", end="", file=sys.stderr, flush=True
+        )
     try:
         if hasattr(args, "action"):
             report, code = args.action(args)
-            print(json.dumps(report, indent=2))
+            clear_progress(args)
+            print(args.render(report, color) if pretty else json.dumps(report, indent=2))
             return code
         return args.func(args)
     except subprocess.CalledProcessError as exc:
         message = exc.stderr or b""
         if isinstance(message, bytes):
             message = message.decode(errors="replace")
-        print(
-            json.dumps(dict(status="BLOCKED", error=message.strip() or str(exc))),
-            file=sys.stderr,
-        )
+        error = message.strip() or str(exc)
     except (ValueError, OSError, RuntimeError, TypeError, KeyError) as exc:
-        print(json.dumps(dict(status="BLOCKED", error=str(exc))), file=sys.stderr)
+        error = str(exc)
+    clear_progress(args)
+    if pretty:
+        title = "\033[31m✘\033[0m \033[1mUpdate blocked\033[0m" if color else "✘ Update blocked"
+        print(f"\n  {title}", file=sys.stderr)
+        for line in error.removeprefix("fatal: ").splitlines():
+            print(f"    {line}", file=sys.stderr)
+        print(file=sys.stderr)
+    else:
+        print(json.dumps(dict(status="BLOCKED", error=error)), file=sys.stderr)
     return 2
+
+
+def clear_progress(args):
+    if getattr(args, "progress", None):
+        print("\r\033[K", end="", file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":
