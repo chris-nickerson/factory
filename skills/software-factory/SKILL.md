@@ -1,6 +1,6 @@
 ---
 name: software-factory
-description: Use Factory for evidence-backed engineering tasks, independent design or diagnosis with GPT and Opus, or size-based Opus simplification rounds on a branch. Supports dependency upgrades, advisory remediation, writing PR descriptions, scoped review and runtime verification across repositories.
+description: Use Factory for evidence-backed engineering tasks, independent design or diagnosis with GPT and Opus, or size-based Opus simplification rounds on a branch. Supports measured hill-climbing, dependency upgrades, advisory remediation, writing PR descriptions, scoped review and runtime verification across repositories.
 ---
 
 # Software Factory
