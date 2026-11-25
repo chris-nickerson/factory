@@ -19,6 +19,11 @@ CASES = {
         "may only edit locally; you own publication. Nothing has run yet.",
         "full delivery", True,
     ),
+    "delivery-local": (
+        "Use two models to agree on a design, implement it, simplify it and run the "
+        "independent review and final checks. Keep everything local. Nothing has started.",
+        "full delivery", False,
+    ),
     "delivery-pending": (
         "Use Factory to deliver the review-ready PR we agreed on. The design consensus was "
         "confirmed. A simplification session has just started. Unit tests pass, but browser "
@@ -110,6 +115,7 @@ SCHEMA = {
 DELIVERY_DECISIONS = {
     "delivery-start": ("obtain design consensus", False),
     "delivery-pending": ("continue verification", False),
+    "delivery-local": ("obtain design consensus", False),
     "delivery-local-recording": ("publish UI evidence", True),
     "delivery-ready": ("hand off to human", True),
 }
@@ -118,7 +124,7 @@ DELIVERY_SCHEMA = {
     "properties": {
         **SCHEMA["properties"],
         "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "publish UI evidence", "end while required work is pending", "hand off to human"]},
-        "ui_evidence_available": {"type": "boolean", "description": "The requested screen has been demonstrated."},
+        "ui_evidence_available": {"type": "boolean", "description": "You inspected a capture showing the requested screen and action, wherever it is stored."},
     },
     "required": [*SCHEMA["required"], "next_action", "ui_evidence_available"],
 }
