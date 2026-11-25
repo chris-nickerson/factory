@@ -5,4 +5,4 @@ description: Use Factory for evidence-backed engineering tasks, independent desi
 
 # Software Factory
 
-Read and follow [the active Factory skill](release/SKILL.md). Resolve its relative paths from the `release/` directory.
+Read and follow `release/SKILL.md`, relative to this installed entry. Resolve its links from the `release/` directory.
