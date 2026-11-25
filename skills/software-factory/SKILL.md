@@ -15,7 +15,7 @@ For each ordinary request, use the conversation to form a working brief before c
 
 Add detail only when it helps the agent act or judge success. Ground consequential instructions in the request, applicable repository instructions, verified constraints or a genuine task dependency. Leave open implementation choices open. Point to the available evidence that can settle a material uncertainty and choose a check proportionate to the outcome. Ask only when the remaining decision needs the user's judgment.
 
-Use the brief to select the workflow and guide your own next actions. Pass the relevant brief to each executing agent. For `factory start`, `consensus` and `simplify`, use the existing `--task` argument. Simplification supplies it as context alongside the versioned prompt. Keep the brief internal and proceed through the user's stopping point without a prompt-writing or approval exchange. If the user steers the work, the conversation governs. Update affected instructions before further actions or handoffs. If an existing frozen task or check conflicts with the correction, stop using it and start a newly scoped run when needed.
+Use the brief to select the workflow below and guide your own next actions. Pass the relevant part to each executing agent, using `--task` for `factory start`, `consensus` and `simplify`. Keep the brief internal and proceed through the user's stopping point without a prompt-writing or approval exchange. When the user steers the work, the conversation governs: update the affected instructions before further actions or handoffs. If a frozen task or check conflicts with the correction, stop using it and start a newly scoped run when needed.
 
 | User's request | Entry |
 | --- | --- |
