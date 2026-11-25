@@ -82,5 +82,3 @@ python3 -B -m unittest discover -s tests -v
 ```
 
 The tests use real Git repositories, bare remotes and subprocesses. They run offline. The scripts in `evals/` run live sessions against real models and grade the result outside the edited checkout.
-
-Factory draws on engineering practices described by Lauren Tan and Addy Osmani.
