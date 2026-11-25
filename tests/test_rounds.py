@@ -722,6 +722,45 @@ class RoundsTests(unittest.TestCase):
         self.assertFalse(later.exists())
         self.assertEqual(len(self.turns.read_text().splitlines()), 1)
 
+    def test_head_move_during_assessment_fingerprint_blocks_provider(self):
+        state, moved = self.move_head_during_fingerprint("assess")
+        self.assertEqual(state["phase"], "assess")
+        self.assertEqual(self.git("rev-parse", "HEAD"), moved)
+        self.assertEqual(len(self.turns.read_text().splitlines()), 1)
+
+    def test_head_move_during_pre_push_fingerprint_blocks_push(self):
+        state, moved = self.move_head_during_fingerprint("publish")
+        self.assertEqual(state["phase"], "publish")
+        self.assertEqual(self.git("rev-parse", "HEAD"), moved)
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+
+    def test_head_move_during_post_push_fingerprint_blocks_confirmation(self):
+        state, moved = self.move_head_during_fingerprint("publish", after_push=True)
+        self.assertEqual(state["phase"], "publish")
+        self.assertEqual(self.git("rev-parse", "HEAD"), moved)
+        remote = self.git("ls-remote", "fixture", "refs/heads/feature")
+        self.assertEqual(remote.split()[0], state["output"])
+
+    def move_head_during_fingerprint(self, phase, *, after_push=False):
+        check = rounds.ensure_checked_working_inputs
+        moved = None
+
+        def check_with_head_move(run, record):
+            nonlocal moved
+            check(run, record)
+            if record["phase"] == phase and moved is None:
+                published = bool(record.get("remote_head"))
+                if published == after_push:
+                    self.git("commit", "--allow-empty", "-qm", "Independent same-tree commit")
+                    moved = self.git("rev-parse", "HEAD")
+
+        with patch.object(rounds, "ensure_checked_working_inputs", check_with_head_move):
+            code, report = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 2, report)
+        self.assertIsNotNone(moved)
+        saved = rounds.work_root() / report["run"] / "state.json"
+        return json.loads(saved.read_text())["rounds"][0], moved
+
     def test_resume_rejects_git_hidden_drift_after_checks(self):
         (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
         self.git("add", ".gitattributes")

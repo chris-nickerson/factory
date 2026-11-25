@@ -334,9 +334,12 @@ def ensure_checked_working_inputs(run, record):
 
 
 def ensure_publishable_checkpoint(run, record):
-    if rev(run["repo"], "HEAD") != record["output"] or changed(run):
+    if changed(run):
         raise Pending("Worktree or branch moved before the checkpoint was confirmed.")
     ensure_checked_working_inputs(run, record)
+    check_branch(run)
+    if rev(run["repo"], "HEAD") != record["output"]:
+        raise Pending("Worktree or branch moved before the checkpoint was confirmed.")
 
 
 def execute(run, folder, recover=False, accepted_head=None):
@@ -392,7 +395,11 @@ def execute(run, folder, recover=False, accepted_head=None):
                     "Candidate changed after checks. Inspect it before continuing."
                 )
             ensure_checked_working_inputs(run, record)
-            contact(run, record, folder, "assess", assess_prompt(record, folder), "")
+            assessment = assess_prompt(record, folder)
+            check_branch(run)
+            if rev(run["repo"], "HEAD") != record["input"]:
+                raise Pending("The checked-out revision changed before assessment.")
+            contact(run, record, folder, "assess", assessment, "")
         elif phase == "repair":
             repairs = sum(c["kind"] == "repair" for c in record["calls"])
             if repairs >= 2:
