@@ -20,6 +20,7 @@ def main():
     import dialogue
     import doctor
     import evidence
+    import plan
     import rounds
     from installation import render_update, update
     from workspace import inspect, repo_root
@@ -61,6 +62,7 @@ def main():
     upgrade.set_defaults(action=update, render=render_update)
     doctor.register(sub)
     evidence.register(sub)
+    plan.register(sub)
 
     dialogue.register(sub)
     rounds.register(sub)

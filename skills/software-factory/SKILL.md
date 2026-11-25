@@ -1,6 +1,6 @@
 ---
 name: software-factory
-description: Use Factory to verify engineering changes, get an independent review of a scoped diff, or get a design or diagnosis from two models that investigate independently, such as GPT and Claude. Use it for simplification rounds sized to a PR, measured hill-climbing, dependency upgrades and advisory remediation, PR descriptions, and documentation.
+description: Use Factory to verify engineering changes, get an independent review of a scoped diff, or get a design or diagnosis from two models that investigate independently, such as GPT and Claude. Use it to plan or resume multi-stage projects. Use it for simplification rounds sized to a PR, measured hill-climbing, dependency upgrades and advisory remediation, PR descriptions, and documentation.
 ---
 
 # Software Factory
@@ -23,6 +23,7 @@ Use the brief to choose a workflow and guide your next actions. Pass the relevan
 | Simplify a nontrivial PR | Use `factory simplify`. Add `--push REMOTE` only if the user requests publication of each round. [Simplification procedure](references/simplify.md) |
 | Resolve a dependency alert (including Socket) or upgrade a package | Trace the resolved package, make a compatible update, and check the actual consumer. [Dependency updates](references/dependencies.md) |
 | Hill-climb an outcome over successive experiments | Use the [hill-climbing workflow](references/hill-climbing.md) to choose the next trial and decide which change to keep. |
+| Plan, coordinate or resume work with dependencies across runs | Use [multi-stage plans](references/plans.md) and `factory plan FILE` to identify the next eligible items. Stop after presenting the plan for a planning-only request. |
 | Implement, verify, refactor, measure performance, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
 | Write or revise a PR description | Use the [PR writing guide](references/pr-descriptions.md) and the target repository's template. |
 | Write, revise or clean up documentation | Use the [Factory writing guide](references/documentation.md). |
