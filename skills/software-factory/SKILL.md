@@ -20,6 +20,8 @@ Use the executable at `scripts/factory` relative to this skill's real directory,
 | Attach a real-world correction to a prior run | Use `factory outcome` with the relevant run and observed behavior. [Later outcomes](references/local.md#later-outcomes) |
 | Deliver an implementation with GPT and Opus | Compose consensus if requested, GPT implementation, the size-based Opus rounds, a fresh GPT review and final behavioral checks. [Delivery and continuation](references/delivery.md) |
 
+For changes to stored data, concurrent writers, replicas, event processing or data-system performance, select a [failure history and consumer observation](references/data-systems.md) when designing or reviewing the contract.
+
 Before freezing acceptance checks, [surface consequential design choices](references/local.md#consequential-design-choices) to the developer or supervising agent, including on tasks without consensus.
 
 When implementing or reviewing a change, [choose which tests to keep](references/local.md#choose-which-tests-to-keep). Name the regression that existing coverage would miss before expanding the suite.
