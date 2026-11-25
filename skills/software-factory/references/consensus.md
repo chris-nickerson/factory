@@ -13,6 +13,8 @@ From the installed skill, run the following commands using its `scripts/factory`
 
 Give the request the observable facts, requirements, evidence locators and desired decision. The driver sends the task and grants read access to the target checkout to Codex and Claude Code. Use the paired workflow where this use of both providers is in scope. The read-only harnesses may inspect sources, but some checks need capabilities outside this workflow. Disclose the missing observation in the decision or supply a neutral reproduction artifact before starting. The read and isolation guarantees of each harness apply. Independence of the initial reports is enforced by the coordinator's delivery order and reinforced by its role instructions. The native host determines filesystem isolation.
 
+For a consequential design, put the shared outcome, constraints, evidence and open questions in the neutral task so both models can test the assumptions independently. Bring their recommendation, strongest alternative and any unresolved disagreement back to the caller using the [design choice guidance](local.md#consequential-design-choices). A confirmed proposal records agreement between the models. The caller’s choice or delegation determines which policy enters implementation.
+
 ## Role and turn rules
 
 - A uses Codex with its configured model or `--gpt-model`. B uses Claude Code with `opus` or `--opus-model`. Keep each opening session for that participant's later turns. Interpret reported model identity from its receipt when available.
