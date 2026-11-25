@@ -1,6 +1,6 @@
 ---
 name: software-factory
-description: Use Factory for evidence-backed engineering tasks, independent design or diagnosis with GPT and Opus, or size-based Opus simplification rounds on a branch. Supports dependency upgrades, advisory remediation, writing PR descriptions and documentation, scoped review and runtime verification across repositories.
+description: Use Factory for evidence-backed engineering tasks, independent design or diagnosis with GPT and Opus, or size-based Opus simplification rounds on a branch. Supports measured hill-climbing, dependency upgrades, advisory remediation, writing PR descriptions and documentation, scoped review and runtime verification across repositories.
 ---
 
 # Software Factory
@@ -12,6 +12,7 @@ Use the executable at `scripts/factory` relative to this skill's real directory,
 | Diagnose or decide independently with a second model | Use `factory consensus`. [Consensus procedure](references/consensus.md) |
 | Simplify a nontrivial PR | Use `factory simplify`. Select the push-each-round variant when requested. [Simplification procedure](references/simplify.md) |
 | Resolve a dependency alert (including Socket) or upgrade a package | Trace the resolved package, make a compatible update, and check the actual consumer. [Dependency updates](references/dependencies.md) |
+| Hill-climb an outcome over successive experiments | Use the [hill-climbing workflow](references/hill-climbing.md) to choose the next trial and decide which change to keep. |
 | Implement, verify, refactor, measure performance, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
 | Write or revise a PR description | Use the [PR writing guide](references/pr-descriptions.md) and the target repository's template. |
 | Write, revise or clean up documentation | Use the [documentation guide](references/documentation.md). |
