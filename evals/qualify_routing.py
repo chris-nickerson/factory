@@ -13,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 # A request that names a model has no tier to choose. Its role spec is scored.
 MODEL_NAMED_BY_USER = "opus"
 CASES = {
+    "existing-pr-round-limit": (
+        "Babysit this existing PR for exactly one round. You already fixed failed CI, "
+        "pushed the fix and read back the new head, open threads and replacement checks. "
+        "Those checks are running. I only asked for this round.",
+        "PR review workflow", True,
+    ),
     "delivery-start": (
         "Use Factory to agree on a design with a second model, implement a new button, "
         "and give me a PR ready for human review with a screenshot. The implementation agent "
@@ -95,7 +101,7 @@ SCHEMA = {
     "properties": {
         "skill": {"type": "string"},
         "procedure": {
-            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "full delivery", "other"],
+            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "full delivery", "PR review workflow", "other"],
         },
         "publish": {"type": "boolean"},
         "tier": {
@@ -113,6 +119,7 @@ SCHEMA = {
 }
 
 DELIVERY_DECISIONS = {
+    "existing-pr-round-limit": ("report round limit", False),
     "delivery-start": ("obtain design consensus", False),
     "delivery-pending": ("continue verification", False),
     "delivery-local": ("obtain design consensus", False),
@@ -122,11 +129,11 @@ DELIVERY_DECISIONS = {
 DELIVERY_SCHEMA = {
     **SCHEMA,
     "properties": {
-        **SCHEMA["properties"],
-        "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "publish UI evidence", "end while required work is pending", "hand off to human"]},
-        "ui_evidence_available": {"type": "boolean", "description": "You inspected a capture showing the requested screen and action, wherever it is stored."},
+        **{key: SCHEMA["properties"][key] for key in ("skill", "procedure", "publish")},
+        "next_action": {"enum": ["report round limit", "obtain design consensus", "implement", "continue verification", "publish UI evidence", "end while required work is pending", "hand off to human"]},
+        "inspected_screen_capture": {"type": "boolean", "description": "You inspected a capture showing the requested screen and action, wherever it is stored."},
     },
-    "required": [*SCHEMA["required"], "next_action", "ui_evidence_available"],
+    "required": ["skill", "procedure", "publish", "next_action", "inspected_screen_capture"],
 }
 
 
@@ -210,10 +217,10 @@ def main():
         tier = tier[0] if tier else "role default"
         expected = dict(skill="software-factory", procedure=route, publish=publish)
         if name in DELIVERY_DECISIONS:
-            expected["next_action"], expected["ui_evidence_available"] = DELIVERY_DECISIONS[name]
+            expected["next_action"], expected["inspected_screen_capture"] = DELIVERY_DECISIONS[name]
         elif tier != MODEL_NAMED_BY_USER:
             expected["tier"] = tier
-        if "tier" not in expected:
+        else:
             (observed or {}).pop("tier", None)
         role_spec = (observed or {}).pop("role_spec", "")
         named_model_kept = tier != MODEL_NAMED_BY_USER or bool(
