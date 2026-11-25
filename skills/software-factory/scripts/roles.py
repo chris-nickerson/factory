@@ -60,6 +60,27 @@ def parse_spec(text):
     return harness or None, model or None
 
 
+def at_tier(spec, tier):
+    """Apply a command's --tier to one role's spec."""
+    if not tier:
+        return spec
+    harness, model = parse_spec(spec) if spec else (None, None)
+    if model:
+        raise RoleError(
+            f"--tier and the model in {spec!r} both choose the model. Give one."
+        )
+    return f"{harness or ''}:{tier}"
+
+
+def add_tier_option(parser):
+    parser.add_argument(
+        "--tier",
+        choices=TIERS,
+        help="model tier for every role this command fills; frontier for work "
+        "where a wrong result would be costly",
+    )
+
+
 def user_config_path():
     base = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
     return Path(base).expanduser() / "software-factory/config.toml"
@@ -182,7 +203,6 @@ def detect_host(environ=None, ancestors=None):
 
 
 def _ancestors(limit=16):
-    """Yield the names of this process's ancestors, nearest first."""
     pid = os.getppid()
     for _ in range(limit):
         code, row = probe(["ps", "-o", "ppid=,comm=", "-p", str(pid)])
@@ -307,10 +327,13 @@ def resolve(role, policy, *, explicit=None, avoid_vendor=None):
         )
     selector, model_source = policy.default_model(role), "default"
     for index, (layer, written_for, model) in enumerate(specs):
-        # A family or complete name belongs to the harness it was written
-        # for. Written alone, it applies unless a later layer chose a harness.
-        fits = written_for == harness or index > harness_set_at
-        if model and (model in PORTABLE_MODELS or fits):
+        written_for_this_harness = written_for == harness
+        written_alone_after_the_harness_choice = index > harness_set_at
+        if model and (
+            model in PORTABLE_MODELS
+            or written_for_this_harness
+            or written_alone_after_the_harness_choice
+        ):
             selector, model_source = model, layer
     return {
         "role": role,

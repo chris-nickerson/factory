@@ -131,7 +131,6 @@ class Codex:
     vendor = "openai"
     title = "Codex CLI"
     login = "codex login"
-    # Codex edits through its shell, so an editing turn always has one.
     capabilities = frozenset(
         {"read_only", "read_only_shell", "edit", "sandboxed_shell", "resume"}
     )

@@ -197,6 +197,13 @@ class RoleTests(unittest.TestCase):
         with self.assertRaisesRegex(roles.RoleError, "no consensus participant"):
             self.pair(a="claude", b="claude", harness_models={"codex": "x"})
 
+    def test_tier_option_sets_the_model_and_refuses_a_second_choice(self):
+        self.assertEqual(roles.at_tier(None, "frontier"), ":frontier")
+        self.assertEqual(roles.at_tier("codex", "frontier"), "codex:frontier")
+        self.assertEqual(roles.at_tier("claude:opus", None), "claude:opus")
+        with self.assertRaisesRegex(roles.RoleError, "Give one"):
+            roles.at_tier("claude:opus", "frontier")
+
     def test_spec_and_configuration_errors_name_the_fix(self):
         for bad in ("", ":", "claude:", "gemini"):
             with self.subTest(bad), self.assertRaises(roles.RoleError):

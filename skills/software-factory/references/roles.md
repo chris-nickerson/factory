@@ -54,11 +54,22 @@ A tier names how capable a model the role needs, so the same request works on an
 | `standard` | A cheaper family for work that repeats across turns and rounds. | `simplifier`, `consensus-a`, `consensus-b` |
 | `default` | Whatever model the harness itself would choose. Factory passes no model. | |
 
-Raise a role to `frontier` when a missed defect or a wrong decision would be costly. Changes to access control, stored data or compatibility qualify, and so does a diagnosis whose evidence is ambiguous. Diff size alone is a poor reason. Lower the reviewer to `:standard` only for a low-risk change where the user wants the cheaper review. Choose the tier when you start a run. A run keeps its model until it finishes.
+Choose the tier for each run from the task, the way you choose a round count. Pass `--tier frontier` to raise every role the command fills, or put a tier in one role's spec.
+
+| The task | Tier |
+| --- | --- |
+| A design that spans several components, is hard to reverse, or has no clear precedent in the codebase | `frontier` for consensus |
+| A diagnosis with competing explanations or thin evidence | `frontier` for consensus |
+| A change to access control, stored data, concurrency or a compatibility contract | `frontier` for simplification |
+| A localized change, a routine decision between known options, or a question the evidence nearly settles | The role default |
+| A low-risk change where the user asks for a cheaper review | `standard` for the reviewer |
+
+Diff size alone is a poor reason to raise a tier. A run keeps its model until it finishes, so choose before you start it.
 
 ```sh
-factory simplify --simplifier :frontier --rounds 3 --base trunk --task '...' --check '...'
-factory consensus diagnosis --a :frontier --b :frontier --task '...'
+factory consensus design --tier frontier --task '...'
+factory simplify --tier frontier --rounds 3 --base trunk --task '...' --check '...'
+factory review RUN_ID --tier standard
 ```
 
 The [built-in policy](../scripts/defaults.toml) maps each tier to a model family for each harness. Factory's code names no model. Claude Code accepts a family name directly. Codex accepts only complete model names, so Factory asks `codex debug models` which listed model currently carries the family. If the catalog is unavailable, set the role to `codex:default` or name a complete model.

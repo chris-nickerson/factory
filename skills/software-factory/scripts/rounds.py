@@ -39,7 +39,6 @@ PROMPT = (
     Path(__file__).resolve().parents[1]
     / "references/reconsider-from-first-principles.v1.txt"
 )
-# In this profile the simplifier has file tools and no shell.
 LEGACY_PROFILE = "codex-opus-simplify/1"
 PROFILES = (LEGACY_PROFILE, "codex-opus-simplify/2", "simplify/3")
 PROFILE = PROFILES[-1]
@@ -99,7 +98,9 @@ def create_run(args, repo):
     if any(not c for c in check_commands):
         raise Pending("A check command must contain an executable.")
     ref = branch_ref(repo)
-    binding = roles.simplifier(roles.Policy(repo), explicit=args.simplifier)
+    binding = roles.simplifier(
+        roles.Policy(repo), explicit=roles.at_tier(args.simplifier, args.tier)
+    )
     print(roles.describe(binding), file=sys.stderr, flush=True)
     run = {
         "profile": PROFILE,
@@ -562,7 +563,7 @@ def validate_arguments(args):
     if subject is not None and not args.recover:
         raise Pending("Changing a rejected checkpoint subject requires --recover.")
     saved = (args.repo, args.base, args.task, args.check, args.allow, args.push)
-    if any(saved) or args.rounds or args.simplifier:
+    if any(saved) or args.rounds or args.simplifier or args.tier:
         raise Pending(
             "A resumed run uses its saved contract, commands, simplifier and "
             "publication target."
@@ -659,6 +660,7 @@ def register(subparsers):
     p.add_argument(
         "--rounds", type=int, choices=(1, 2, 3), help="fresh simplifier rounds (default 3)"
     )
+    roles.add_tier_option(p)
     p.add_argument(
         "--simplifier",
         metavar="SPEC",

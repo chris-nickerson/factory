@@ -9,6 +9,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# A request that names a model has no tier to choose, so the tier is unscored.
+MODEL_NAMED_BY_USER = None
 CASES = {
     "checks": (
         "Use Software Factory to check the parser behavior I specify. I only want local checks and no review.",
@@ -29,6 +31,7 @@ CASES = {
         "Simplify this branch with Opus and push each round. One correction before you start: keep every round local.",
         "simplify",
         False,
+        MODEL_NAMED_BY_USER,
     ),
     "review": (
         "Use Software Factory to get an independent review of this change from a model that didn't write it. Don't change any files.",
@@ -39,6 +42,20 @@ CASES = {
         "Have fresh Opus sessions simplify this branch. Push every checked checkpoint to origin.",
         "simplify",
         True,
+        MODEL_NAMED_BY_USER,
+    ),
+    "hard-design": (
+        "We have to move billing from the monolith to its own service while three other services "
+        "keep writing to the same tables, and we can't undo the cutover once customers are invoiced. "
+        "Have two models work out the migration design independently. Stay read-only.",
+        "consensus design",
+        False,
+        "frontier",
+    ),
+    "routine-design": (
+        "Have two models decide whether this small helper should return None or raise on a missing key. Stay read-only.",
+        "consensus design",
+        False,
     ),
 }
 SCHEMA = {
@@ -46,11 +63,15 @@ SCHEMA = {
     "properties": {
         "skill": {"type": "string"},
         "procedure": {
-            "enum": ["local", "consensus diagnosis", "simplify", "other"],
+            "enum": ["local", "consensus design", "consensus diagnosis", "simplify", "other"],
         },
         "publish": {"type": "boolean"},
+        "tier": {
+            "enum": ["role default", "frontier", "standard"],
+            "description": "The model tier you would pass to the procedure's command.",
+        },
     },
-    "required": ["skill", "procedure", "publish"],
+    "required": ["skill", "procedure", "publish", "tier"],
     "additionalProperties": False,
 }
 
@@ -90,7 +111,7 @@ def main():
 
     def sample(job):
         name, trial = job
-        prompt, route, publish = CASES[name]
+        prompt, route, publish, *tier = CASES[name]
         prefix = out / f"{name}-{trial}"
         argv = [
             "codex", "--no-daemon", "-a", "never", "exec", "--ephemeral",
@@ -118,7 +139,8 @@ def main():
                 stderr=errors,
                 input=(
                     "Read the request as a coding agent in this project. Select the installed skill and procedure "
-                    "you would use. Report whether the latest request authorizes publication. "
+                    "you would use. Report whether the latest request authorizes publication and "
+                    "which model tier you would pass. "
                     "Read any guidance you need, and stop before running the selected procedure.\n\n"
                     + prompt
                 ),
@@ -128,7 +150,14 @@ def main():
             observed = json.loads(prefix.with_suffix(".jsonl").read_text()).get("structured_output")
         elif result.returncode == 0:
             observed = json.loads(prefix.with_suffix(".json").read_text())
-        expected = dict(skill="software-factory", procedure=route, publish=publish)
+        expected = dict(
+            skill="software-factory", procedure=route, publish=publish,
+            tier=tier[0] if tier else "role default",
+        )
+        if expected["tier"] is MODEL_NAMED_BY_USER:
+            del expected["tier"]
+            if observed:
+                observed.pop("tier", None)
         return dict(case=name, trial=trial, observed=observed, expected=expected,
                     cli_exit=result.returncode, passed=observed == expected)
 

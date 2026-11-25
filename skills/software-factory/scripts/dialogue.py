@@ -45,7 +45,6 @@ SCHEMA = 3
 
 
 def _participant(meta, actor):
-    """Return the saved binding, or the fixed pair of records before version 3."""
     if "participants" in meta:
         return meta["participants"][actor]
     return {
@@ -398,6 +397,7 @@ def register(subparsers):
         # Accept invocations generated for the old CLI without limiting agents.
         config.add_argument("--timeout", type=_positive, help=argparse.SUPPRESS)
         config.add_argument("--deadline", type=_positive, help=argparse.SUPPRESS)
+        roles.add_tier_option(config)
         for slot in ("a", "b"):
             config.add_argument(
                 f"--{slot}",
@@ -434,8 +434,8 @@ def handle(args):
         subject = snapshot(repo)
         participants = roles.consensus_pair(
             roles.Policy(repo),
-            a=args.a,
-            b=args.b,
+            a=roles.at_tier(args.a, args.tier),
+            b=roles.at_tier(args.b, args.tier),
             harness_models={"codex": args.gpt_model, "claude": args.opus_model},
         )
         for binding in participants.values():

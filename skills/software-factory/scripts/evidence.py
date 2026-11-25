@@ -312,8 +312,7 @@ def outcome(args):
 
 
 EMBEDDED_DIFF_MAX_CHARS = 600_000
-# `review --model` predates role specs, when the reviewer was always Codex.
-MODEL_FLAG_HARNESS = "codex"
+HARNESS_IMPLIED_BY_MODEL_FLAG = "codex"
 
 
 def review_writer(repo, policy):
@@ -383,9 +382,9 @@ def review(args):
         if not (staged.strip() or unstaged.strip() or new.strip()):
             raise ValueError("Empty change from review base")
 
-        spec = args.reviewer
+        spec = roles.at_tier(args.reviewer, args.tier)
         if args.model:
-            harness, model = roles.parse_spec(spec or MODEL_FLAG_HARNESS)
+            harness, model = roles.parse_spec(spec or HARNESS_IMPLIED_BY_MODEL_FLAG)
             if model:
                 raise ValueError("Give the reviewer's model once, in --reviewer.")
             spec = f"{harness or ''}:{args.model}"
@@ -529,6 +528,7 @@ def register(sub):
             )
         if name == "review":
             parser.add_argument("--timeout", type=int, help=argparse.SUPPRESS)
+            roles.add_tier_option(parser)
             parser.add_argument(
                 "--reviewer",
                 metavar="SPEC",

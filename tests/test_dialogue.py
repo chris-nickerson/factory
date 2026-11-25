@@ -132,6 +132,13 @@ class DialogueTests(unittest.TestCase):
         self.assertEqual(out["reductions"], [])
         self.calls.clear()
         self.script = [OPEN, OPEN, PROPOSE_B, ACCEPT_B]
+        self.start("--tier", "frontier")
+        self.assertEqual(
+            [("codex", "gpt-9.2-astra"), ("claude", "fable")],
+            [(p, c["model"]) for p, c in self.calls[:2]],
+        )
+        self.calls.clear()
+        self.script = [OPEN, OPEN, PROPOSE_B, ACCEPT_B]
         code, out = self.start("--a", "claude", "--b", "claude")
         self.assertEqual(0, code)
         self.assertEqual({"claude"}, {p for p, _ in self.calls})
