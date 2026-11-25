@@ -166,10 +166,8 @@ def check(args):
         if set(ids) - data["claims"].keys() or args.timeout <= 0:
             raise ValueError("Unknown claim or nonpositive timeout")
         if args.remaining:
-            report, code = summary(folder, data, snapshot(repo))
-            ids = [key for key, row in report["claims"].items() if row["status"] != "PASS"]
-            if not ids:
-                return report, code
+            rows = summary(folder, data, snapshot(repo))[0]["claims"]
+            ids = [key for key in ids if rows[key]["status"] != "PASS"]
         for key in ids:
             claim = data["claims"][key]
             index = len(data["attempts"]) + 1
