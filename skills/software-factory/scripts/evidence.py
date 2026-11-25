@@ -359,6 +359,33 @@ def review(args):
         base = data["base"]
         paths = data.get("paths", [])
 
+        def diff(form, *revisions):
+            return git(
+                repo,
+                "--literal-pathspecs",
+                "diff",
+                "--no-ext-diff",
+                "--no-textconv",
+                form,
+                *revisions,
+                "--",
+                *paths,
+            ).stdout.decode(errors="replace")
+
+        staged = diff("--stat", "--cached", base)
+        unstaged = diff("--stat")
+        new = git(
+            repo,
+            "--literal-pathspecs",
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "--",
+            *paths,
+        ).stdout.decode(errors="replace")
+        if not (staged.strip() or unstaged.strip() or new.strip()):
+            raise ValueError("Empty change from review base")
+
         spec = args.reviewer
         if args.model:
             harness, model = roles.parse_spec(spec or MODEL_FLAG_HARNESS)
@@ -371,33 +398,9 @@ def review(args):
         reviewer_runs_git = (
             "read_only_shell" in ADAPTERS[binding["harness"]].capabilities
         )
-
-        def diff(*revisions):
-            return git(
-                repo,
-                "--literal-pathspecs",
-                "diff",
-                "--no-ext-diff",
-                "--no-textconv",
-                *(("--stat",) if reviewer_runs_git else ("--full-index",)),
-                *revisions,
-                "--",
-                *paths,
-            ).stdout.decode(errors="replace")
-
-        staged = diff("--cached", base)
-        unstaged = diff()
-        new = git(
-            repo,
-            "--literal-pathspecs",
-            "ls-files",
-            "--others",
-            "--exclude-standard",
-            "--",
-            *paths,
-        ).stdout.decode(errors="replace")
-        if not (staged.strip() or unstaged.strip() or new.strip()):
-            raise ValueError("Empty change from review base")
+        if not reviewer_runs_git:
+            staged = diff("--full-index", "--cached", base)
+            unstaged = diff("--full-index")
         receipt = dict(
             subject=subject,
             base=base,

@@ -156,30 +156,11 @@ class Codex:
         for argv in (["codex", "debug", "models"], ["codex", "debug", "models", "--bundled"]):
             try:
                 catalog = json.loads(probe(argv)[1])["models"]
-                if any(model["slug"] == selector for model in catalog):
-                    return selector
-                listed = sorted(
-                    (
-                        model
-                        for model in catalog
-                        if model.get("visibility") == "list"
-                        and not _retired(model)
-                    ),
-                    key=lambda model: model["priority"],
-                )
-                break
+                return _family_member(catalog, selector)
             except (ValueError, KeyError, TypeError, AttributeError):
                 continue
-        else:
-            raise HarnessError(
-                f"Codex did not provide a model catalog to resolve {selector!r}."
-            )
-        for model in listed:
-            if selector.lower() in model["slug"].lower().replace(".", "-").split("-"):
-                return model["slug"]
         raise HarnessError(
-            f"The Codex catalog lists no model in the {selector!r} family. "
-            "Run `codex debug models` to see the current names."
+            f"Codex did not provide a model catalog to resolve {selector!r}."
         )
 
     @staticmethod
@@ -270,6 +251,26 @@ class Codex:
         return {"session_id": session, "text": text, "model_reported": None}
 
 
+def _family_member(catalog, family):
+    if any(model["slug"] == family for model in catalog):
+        return family
+    listed = sorted(
+        (
+            model
+            for model in catalog
+            if model.get("visibility") == "list" and not _retired(model)
+        ),
+        key=lambda model: model["priority"],
+    )
+    for model in listed:
+        if family.lower() in model["slug"].lower().replace(".", "-").split("-"):
+            return model["slug"]
+    raise HarnessError(
+        f"The Codex catalog lists no model in the {family!r} family. "
+        "Run `codex debug models` to see the current names."
+    )
+
+
 def _retired(model):
     when = (model.get("upgrade") or {}).get("retirement_at")
     try:
@@ -293,9 +294,7 @@ def turn_capabilities(edit, local_shell):
 
 def _model_identity(record, result):
     requested = record["model_requested"]
-    reported = result.get("model_usage") or [
-        name for name in [result.get("model_reported")] if name
-    ]
+    reported = result.get("model_usage", [])
     if not reported:
         return "unreported"
     if not requested:
@@ -307,8 +306,7 @@ def _model_identity(record, result):
         raise HarnessError(
             f"The harness reports {', '.join(reported)}, not the requested {requested}"
         )
-    one_model_answered = len(reported) == 1
-    return "matched" if one_model_answered else "indeterminate"
+    return "matched" if len(reported) == 1 else "indeterminate"
 
 
 def _supervise(directory):

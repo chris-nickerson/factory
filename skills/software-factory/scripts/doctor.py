@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import sys
 
+from evidence import review_writer
 from harness import ADAPTERS
 import roles
 from workspace import repo_root
@@ -21,7 +22,7 @@ def diagnose(args):
     exe = shutil.which("git")
     rc, version = roles.probe([exe, "--version"]) if exe else (2, "")
     checks["git"] = {"available": rc == 0, "path": exe, "version": version}
-    resolved = roles.report(repo_root(Path(args.repo)))
+    resolved = role_report(repo_root(Path(args.repo)))
     if args.profile == "paired":
         for name, details in resolved["harnesses"].items():
             checks[name] = {
@@ -52,11 +53,16 @@ def diagnose(args):
     return report, 0 if ready else 2
 
 
+def role_report(repo):
+    policy = roles.Policy(repo)
+    return roles.report(policy, writer=review_writer(repo, policy))
+
+
 def show_roles(args):
     repo = repo_root(Path(args.repo))
     if args.approve:
         roles.approve_project(repo)
-    return roles.report(repo), 0
+    return role_report(repo), 0
 
 
 def register(sub):

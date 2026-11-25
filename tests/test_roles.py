@@ -84,7 +84,7 @@ class RoleTests(unittest.TestCase):
         with self.assertRaisesRegex(roles.RoleError, "factory doctor"):
             self.reviewer()
         self.assertEqual(
-            {row["status"] for row in roles.report(self.repo)["roles"].values()},
+            {row["status"] for row in roles.report(roles.Policy(self.repo))["roles"].values()},
             {"UNFILLED"},
         )
 
@@ -106,7 +106,7 @@ class RoleTests(unittest.TestCase):
         self.configure('[roles]\nreviewer = "claude:opus"\n')
         self.configure('[roles]\nreviewer = "codex:sol"\n', project=True)
         self.assertEqual(self.reviewer()["harness"], "claude")
-        note = roles.report(self.repo)["configuration"]["note"]
+        note = roles.report(roles.Policy(self.repo))["configuration"]["note"]
         self.assertIn("factory roles --approve", note)
         roles.approve_project(self.repo)
         self.assertEqual(self.reviewer()["harness"], "codex")
@@ -116,7 +116,7 @@ class RoleTests(unittest.TestCase):
     def test_unapproved_project_mistake_cannot_stop_a_run(self):
         use_machine(self, "codex")
         self.configure('[roles]\nreviewr = "codex"\n', project=True)
-        self.assertIn("reviewr", roles.report(self.repo)["configuration"]["note"])
+        self.assertIn("reviewr", roles.report(roles.Policy(self.repo))["configuration"]["note"])
         self.assertEqual(self.reviewer()["harness"], "codex")
         with self.assertRaisesRegex(roles.RoleError, "reviewr"):
             roles.approve_project(self.repo)

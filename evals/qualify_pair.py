@@ -65,8 +65,6 @@ def main():
         return 2
     out = args.output.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=False, mode=0o700)
-    if (args.simplifier or "claude").startswith("claude"):
-        check_auto_shell(out)
     repo = out / "checkout"
     repo.mkdir()
     env = {**os.environ, "FACTORY_STATE_DIR": str(out / "state")}
@@ -166,6 +164,8 @@ def main():
         "--push",
         "fixture",
     )
+    if result["simplifier"]["harness"] == "claude":
+        check_auto_shell(out)
     rounds = result["rounds"]
     head = git("rev-parse", "HEAD")
     if (

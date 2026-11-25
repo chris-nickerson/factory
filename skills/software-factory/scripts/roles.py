@@ -279,8 +279,9 @@ def resolve(role, policy, *, explicit=None, avoid_vendor=None):
         if tables.get("roles", {}).get(role)
     ]
     named = [index for index, (_, harness, _) in enumerate(specs) if harness]
+    harness_set_at = named[-1] if named else -1
     if named:
-        source, harness, _ = specs[named[-1]]
+        source, harness, _ = specs[harness_set_at]
         missing = ROLE_NEEDS[role] - ADAPTERS[harness].capabilities
         if missing:
             raise RoleError(
@@ -309,7 +310,7 @@ def resolve(role, policy, *, explicit=None, avoid_vendor=None):
         # A family or complete name belongs to the harness it was written
         # for. Written alone, it applies unless a later layer chose a harness.
         fits = written_for == harness or (
-            written_for is None and not (named and named[-1] > index)
+            written_for is None and index > harness_set_at
         )
         if model and (model in PORTABLE_MODELS or fits):
             selector, model_source = model, layer
@@ -408,11 +409,11 @@ def consensus_pair(policy, *, a=None, b=None, harness_models=None):
     return pair
 
 
-def report(repo=None, policy=None):
-    """Show what each role resolves to on this machine, and why."""
-    from evidence import review_writer
+def report(policy, writer=None):
+    """Show what each role resolves to on this machine, and why.
 
-    policy = policy or Policy(repo)
+    `writer` is who last changed the code, as `reviewer` takes it.
+    """
     rows = {}
 
     def fill(build, *names):
@@ -427,7 +428,6 @@ def report(repo=None, policy=None):
             for role in names:
                 rows[role] = {"status": "UNFILLED", "reason": str(error)}
 
-    writer = review_writer(repo, policy) if repo else None
     fill(lambda: [reviewer(policy, writer=writer)], "reviewer")
     fill(lambda: [simplifier(policy)], "simplifier")
     fill(lambda: consensus_pair(policy).values(), "consensus-a", "consensus-b")

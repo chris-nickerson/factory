@@ -18,7 +18,6 @@ from supervision import turn_stopped
 from workspace import repo_root, snapshot, state_root, workspace_lock, write_json
 
 
-SLOTS = ("a", "b")
 HARNESSES_BEFORE_PARTICIPANTS = {"a": "codex", "b": "claude"}
 GOALS = {
     "design": "Compare viable designs against the actual requirements. State the tradeoff, "
@@ -389,7 +388,7 @@ def register(subparsers):
         # Accept invocations generated for the old CLI without limiting agents.
         config.add_argument("--timeout", type=_positive, help=argparse.SUPPRESS)
         config.add_argument("--deadline", type=_positive, help=argparse.SUPPRESS)
-        for slot in SLOTS:
+        for slot in HARNESSES_BEFORE_PARTICIPANTS:
             config.add_argument(
                 f"--{slot}",
                 metavar="SPEC",
