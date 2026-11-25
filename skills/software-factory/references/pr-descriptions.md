@@ -16,11 +16,11 @@ In this fictional PR, the author ran the same export on both revisions:
 
 > Large order exports stopped after the first page, so some orders were missing from the CSV. The exporter now requests each remaining page before it closes the file.
 >
-> The regression test used pages of two, two and one order. On the base revision the CSV contained only the first two orders. On the fix it contained all five and one header row.
+> The test served pages of two, two and one order. It counted page requests and CSV data rows separately and checked that the fixed export had one header row.
 >
-> | Five orders on three pages | Pages read | Orders in the CSV |
+> | Five orders on three pages | Page requests | Orders in the CSV |
 > |---|---|---|
 > | Before | 1 | 2 of 5 |
-> | After | 1, 2, 3 | 5 of 5 |
+> | After | 3 | 5 of 5 |
 
 Read the draft with the ticket closed. Can a reviewer explain the change, the reason and the evidence? Check factual claims against the final diff and evidence, especially claims about what always happens or cannot happen. Cut repeated facts, file inventories and the agent’s work diary. For a body-only request, return the Markdown exactly as it should appear on the PR, without a chat introduction, an enclosing code fence or a closing note.
