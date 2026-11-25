@@ -83,4 +83,4 @@ python3 -B -m unittest discover -s tests -v
 
 The tests use real Git repositories, bare remotes and subprocesses. They run offline. The scripts in `evals/` run live sessions against real models and grade the result outside the edited checkout.
 
-Factory draws on work by Lauren Tan and on Addy Osmani's [agent skills](https://github.com/addyosmani/agent-skills).
+Factory draws on engineering practices described by Lauren Tan and Addy Osmani.
