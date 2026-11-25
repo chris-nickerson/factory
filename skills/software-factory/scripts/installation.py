@@ -265,8 +265,8 @@ def install_release(
     old = link_target(current)
     retry = saved.get("pending_release")
     if rollback:
-        new = retry["release"] if retry else saved.get("previous")
-        commit = retry["commit"] if retry else saved.get("previous_commit")
+        new = saved.get("previous")
+        commit = saved.get("previous_commit")
         if not new:
             raise ValueError("No previous release recorded")
         release = Path(new)
@@ -344,7 +344,7 @@ def install_release(
     if registration:
         configuration["skill_entry"] = registration
     entry = None
-    legacy_link = False
+    publish = False
     if default_skill in destinations:
         template = release / "SKILL.md"
         if rollback and not saved.get("previous_full_entry"):
@@ -353,13 +353,12 @@ def install_release(
         if template.is_file():
             entry = template.read_bytes()
             registration = {"path": str(default_skill), "sha256": digest(entry)}
-            if entry == installed_entry:
-                entry = None
-            elif installed_entry is not None:
+            publish = entry != installed_entry
+            if publish and installed_entry is not None:
                 registration["replacing"] = digest(installed_entry)
             configuration["skill_entry"] = registration
         else:
-            legacy_link = link_target(default_skill) != str(current)
+            publish = link_target(default_skill) != str(current)
     for link, target in destinations.items():
         if link != default_skill and not link.is_symlink():
             link.parent.mkdir(parents=True, exist_ok=True)
@@ -380,7 +379,7 @@ def install_release(
         configuration["commit"] = commit
     write_json(manifest, configuration)
     replace_link(current, release)
-    if entry is not None or legacy_link:
+    if publish:
         publish_default_skill(default_skill, current, entry)
     pending = configuration.pop("pending_release", None)
     if pending:

@@ -312,13 +312,10 @@ def check_candidate(run, record, folder):
                 f"Could not complete {cmd!r}: {reason}. Inspect {path} and resume."
             )
         after, _ = candidate(run, folder)
-        if before != after or rev(run["repo"], "HEAD") != record["input"]:
+        inputs = snapshot(run["repo"], follow_symlinks=False)
+        if after != before or inputs != working_inputs:
             raise Pending(
-                "Checks changed the candidate or its revision. Inspect the changes and resume."
-            )
-        if snapshot(run["repo"], follow_symlinks=False) != working_inputs:
-            raise Pending(
-                "Checks changed the working inputs. Inspect the changes and resume."
+                "Checks changed the candidate or its working inputs. Inspect the changes and resume."
             )
     record.update(tree=before, phase="assess")
     save(folder / "state.json", run)
