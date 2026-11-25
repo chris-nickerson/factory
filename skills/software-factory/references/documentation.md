@@ -1,8 +1,44 @@
 # Write and maintain documentation
 
-Write docs that help readers do a task or understand something they cannot learn from the code. Explain how to get started, how the parts fit together, or why a constraint matters. Keep those explanations current.
+Write for a capable reader who missed the conversation. Lead with what the reader can do or what result they should expect. This guide applies to documentation, agent instructions, pull requests, CLI text and code comments.
 
-The README helps people decide whether to use the project and how to get started. `SKILL.md`, `AGENTS.md` and `CLAUDE.md` are instructions for agents. Follow the sentence style in the [PR writing guide](pr-descriptions.md).
+## Write in plain technical English
+
+- Name the actor, action and object. Put a condition before an action when the reader must check it first.
+- Use one main thought per sentence. Keep a condition or reason with the action when the reader needs both to make a decision.
+- Use the same term for the same thing. Explain Factory terms on first use. Match names the reader sees in code, commands and output.
+- Use headings that answer a reader's question. Give each numbered step one action. Put prerequisites, commands and expected results where the reader needs them.
+
+| Reader's task | What to write |
+| --- | --- |
+| Get started | Explain what the project does, give the prerequisites and walk through a working example. |
+| Complete a procedure | State when to use it, who acts, where to run commands and how to recognize success or recover from failure. |
+| Look up a fact | Give the exact flag, default, state or constraint. Link to the source that owns it. |
+| Understand a design | Explain what the parts do, why they work that way and where the guarantees end. |
+| Follow agent instructions | Put discovery terms in the skill description. In the loaded instructions, state the trigger, action, allowed side effects and stopping point. Link to detailed mechanics. Give an example where nearby requests lead to different decisions. |
+| Recover from an error | Say what failed, what the reader can safely do next and where details are available. Check whether callers depend on the exact output. |
+
+For pull request descriptions, start from the [PR writing guide](pr-descriptions.md).
+
+## Factory terms
+
+| Term | Meaning |
+| --- | --- |
+| Contract | The claims and checks saved by `factory start`. A frozen contract keeps the same checks across revisions. |
+| Subject | The workspace fingerprint associated with the result. In a Git checkout, it includes HEAD, the index, tracked working files and unignored new files. |
+| Stale result | A result for a different subject. Use `factory check RUN_ID` for a stale check or `factory review RUN_ID` for a stale review. |
+| Checkpoint | The checked Git commit for a simplification round. A round with no edits can use the existing commit. |
+| Receipt | A saved record of an operation, such as a provider call, check, review or publication. |
+
+Keep working files, the Git index and a committed tree distinct. A change can be present in one even when it is absent from another.
+
+## Examples from Factory
+
+| Before | After |
+| --- | --- |
+| “The second `check` makes a new observation, and this time it fails.” | “Run `./factory check "$run"` to check the current file. In this example, the new check fails because the file now says `pending`.” |
+| “For the requested push-each-round procedure, select the actual work-branch remote.” | “If the user asks to push each round, pass `--push REMOTE` with the work branch's remote.” |
+| “Read repository evidence and command candidates without executing project code” | “Find repository instructions, skills, and suggested commands without running project code” |
 
 ## Keep facts in one place
 
@@ -21,6 +57,15 @@ For a lint or type-check suppression, identify the exact diagnostic and run the 
 Update or remove any documentation the code change makes false in the same change. Edit the existing explanation instead of appending an update. Reread the whole document and delete anything that no longer helps the reader.
 
 Make claims readers can check. Run example commands as written and verify the links. If the repository has a test that checks links or examples, run it.
+
+## Review a writing change
+
+1. Read the changed text with the issue closed. Check whether a new reader can identify the next action, its conditions and its expected result.
+2. Trace changed strings to their consumers. Preserve protocol lines, pinned prompts, fixtures, license text and exact output that callers rely on. Keep existing public links and anchors usable.
+3. Exercise changed procedures, help and diagnostics through their entry points. For routing, check a neighboring request with a different correct outcome. Compare what the host loaded and what the agent attempted.
+4. Review comments and docstrings beside the code. Verify workaround causes before editing their explanations.
+
+Use sentence length and terminology reports to find passages worth reading. Judge the result by whether readers can complete the task and preserve the contract.
 
 ## Record the reason for a change
 

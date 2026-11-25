@@ -1,17 +1,17 @@
 # Software Factory
 
-Factory is an agent skill and a local command-line tool for engineering work you can check. You ask your coding agent for something in plain language. The skill picks a procedure, and the `factory` command records the result of a frozen check against a fingerprint of the workspace. The check, execution environment, and saved records rely on the trust you place in the local account.
+Software Factory helps your coding agent verify engineering work. The skill tells the agent how to handle your request. The `factory` CLI saves the checks before the agent edits, then records what happens when it runs them. Each result is tied to a workspace fingerprint, a digest of the source state Factory checked.
 
 ## What you can ask for
 
-- **Fix a bug or build a change.** The agent writes down the expected behavior before it edits, reproduces the failure, then shows the same check passing on the final code. If the workspace fingerprint changes after a check, the evidence goes stale.
-- **Get a second opinion.** GPT and Claude Opus work through a design or a diagnosis independently, then argue until they agree on one proposal or agree that the evidence is missing.
-- **Simplify a branch.** One to three fresh Opus sessions reconsider the change from first principles. Factory checks and commits each round.
+- **Fix a bug or build a change.** The agent records what should happen before it edits. It checks the original code and reruns the same check on the final code.
+- **Get a second opinion.** Codex and Claude Opus investigate a design or diagnosis independently, then compare proposals. They can agree, identify missing evidence, or reach the discussion limit without agreement.
+- **Simplify a branch.** One to three fresh Opus sessions reconsider the change. Factory checks each round and commits a changed tree only after it passes.
 - **Upgrade a dependency or clear a scanner alert.** The agent traces the resolved package and checks the code that actually uses it.
-- **Ship a pull request.** The agent writes the description, watches CI and reviews, and fixes what is real.
-- **Keep documentation honest.** The agent removes what has gone stale and documents only what stays true.
+- **Prepare a pull request.** The agent writes the description, monitors CI and review feedback, and fixes confirmed problems within the request.
+- **Update documentation.** The agent checks instructions against the current project and updates or removes stale information.
 
-Factory is not tied to one kind of project. It reads each repository's own instructions and test commands instead of bringing its own.
+Factory uses the target repository's instructions and checks. Its records rely on the local account, which controls the checks, tools and saved results.
 
 ## Install
 
@@ -35,7 +35,7 @@ Open a repository in a new agent session and try:
 
 ## See evidence go stale
 
-This example runs offline from a checkout, without installing anything or signing in to a model. It checks one claim, changes the code under it, then asks Factory what it knows.
+Run this example offline from the Factory checkout. You need Git and Python, and you can use the checkout's `./factory` directly. The example creates a temporary project, checks its file, then edits the file so you can see what happens to the earlier result.
 
 ```sh
 demo=$(mktemp -d)
@@ -53,7 +53,7 @@ printf 'pending\n' > "$demo/project/answer.txt"
 ./factory check "$run"                  # FAILED, claim FAIL (exit 1)
 ```
 
-`status` notices the edit without rerunning the check. The second `check` makes a new observation, and this time it fails.
+After you edit `answer.txt`, `./factory status "$run"` reports the earlier check result as `STALE` without rerunning the check. Run `./factory check "$run"` to check the current file. In this example, the new check fails because the file now says `pending`.
 
 ## Update
 
@@ -63,13 +63,13 @@ factory update
 
 Factory installs the latest `main` from the repository you installed from. It lists the incoming commits when it knows the previous source commit and the fetched history covers the range. Pass `--json` for a machine-readable report. To go back, run `python3 install.py --rollback` from an up-to-date checkout with the original install prefix.
 
-The CLI and skill files agree after a completed update or rollback. During the switch, a reader can see files from different releases. Let the command finish before starting a new agent session. If the command is interrupted, rerun it to finish the switch.
+Wait for an update or rollback to finish before you open a new agent session. During the switch, the CLI and skill files can come from different releases. If the command stops partway through, rerun the same command to finish the switch.
 
 If the default skill directory is still a symlink or its entry still points readers to `release/SKILL.md` after updating, run `factory update` again so the new CLI can migrate it. You can also run `python3 install.py` once from an updated checkout. For a legacy install with a custom prefix, migrate from the original home directory so Factory can identify the default skill path. Rolling back to a release that predates this layout restores the symlink.
 
-Keep the installed skill path out of Git's index. If the index tracks an older skill symlink, remove that entry before verifying changes in the checkout.
+Keep the installed skill path out of Git's index. If the index still tracks an older symlink at that path, remove the index entry before verifying changes in that checkout.
 
-Factory keeps run records outside your project, in `~/.local/state/software-factory` by default. Set `FACTORY_STATE_DIR` to move them. Use the same state directory for all Factory invocations on one worktree so they share its lock and pending-run ownership. The records can include source code and command output.
+Factory saves run records outside your project, in `~/.local/state/software-factory` by default. To choose a different directory, set `FACTORY_STATE_DIR`. Use the same directory for every Factory command on a worktree so the commands share the workspace lock and can tell which run owns the worktree. Records can include source code and command output.
 
 ## Learn more
 

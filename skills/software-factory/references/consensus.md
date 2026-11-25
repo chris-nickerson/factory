@@ -1,6 +1,6 @@
 # Design and root-cause consensus
 
-Use this workflow when the user requests cross-model agreement about a design or diagnosis. It returns an agreed decision with caveats, an unresolved disagreement, or the missing capability. The frozen task stays read-only. Start a separate authorized change workflow to implement an accepted design.
+Use this workflow when the user asks two models to agree on a design or diagnosis. Factory reports their agreement, an unresolved disagreement or the capability needed to proceed. The participants work read-only. To implement an accepted design, start a separate change workflow within the user's authorization.
 
 From the installed skill, run the following commands using its `scripts/factory` executable. Replace `./factory` below with that executable when working outside the Factory repository.
 

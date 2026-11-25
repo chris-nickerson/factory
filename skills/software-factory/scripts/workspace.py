@@ -272,7 +272,7 @@ def snapshot(repo, *, plain_directory=False, worktree_only=False):
                     f"Cannot bind directory or special-file link {p} to this source set"
                 )
         elif name in gitlinks and p.is_dir():
-            # ls-files in a deinitialized submodule would discover the parent repo.
+            # Without the submodule's .git metadata, Git would list the parent repo's files.
             field(
                 snapshot(
                     p,
@@ -319,7 +319,7 @@ def package_manager(folder, root):
 
 
 def inspect(repo, targets):
-    """Return evidence locators and declared commands without running project code."""
+    """Find instructions, skills, source paths and suggested commands without running project code."""
     scopes = {repo}
     for target in targets:
         path = (repo / target).resolve()

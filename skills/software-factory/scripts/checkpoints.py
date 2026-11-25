@@ -234,9 +234,8 @@ def bound_destination(run):
         raise Pending(
             "The configured push destination changed. Reconcile the original destination first."
         )
-    # Git applies insteadOf to explicit URLs too. Resolve the configured remote
-    # once, then bind a fresh remote through a unique single rewrite for both
-    # directions. A second configured rewrite of the resolved URL cannot run.
+    # Git applies insteadOf to explicit URLs. Use a marker URL so the ref lookup
+    # and the push both use the saved destination without a second URL rewrite.
     alias = "factory-" + uuid.uuid4().hex
     marker = "factory-checkpoint://" + alias
     env = os.environ.copy()
@@ -257,8 +256,7 @@ def published(run, destination=None):
     alias, env = destination or bound_destination(run)
     ref = target_ref(run)
     rows = git(run["repo"], "ls-remote", "--refs", alias, ref, env=env).splitlines()
-    # ls-remote takes tail patterns; a ref literally named heads/refs/heads/X
-    # can match the same pattern. Compare the returned full ref name as well.
+    # Git matches ref suffixes in ls-remote, so compare the full ref name.
     for row in rows:
         oid, name = row.split(b"\t", 1)
         if name == os.fsencode(ref):

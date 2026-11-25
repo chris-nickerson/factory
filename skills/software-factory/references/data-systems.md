@@ -1,6 +1,6 @@
 # Choosing evidence for a data-system change
 
-Start with one promise a caller relies on. Who can write the data? Which copy does the caller read? At what point has the system acknowledged success? Trace one operation across those boundaries. Choose the failure history that could break the promise and put its observable result in the Factory contract. Use a barrier, a controlled failure or a saved input to reproduce the history. A randomly timed sleep makes a poor witness.
+Start with one promise a caller relies on. Who can write the data? Which copy does the caller read? When does the system acknowledge success? Trace one operation across those boundaries. Choose a sequence of events that could break the promise. Put the result the caller should observe in the Factory contract. Reproduce the sequence with a barrier, a controlled failure or a saved input.
 
 ## When the caller loses the answer
 

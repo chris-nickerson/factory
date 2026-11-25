@@ -1,10 +1,14 @@
 # Local change and verification
 
-1. Inspect from the target checkout. Record the task boundary, applicable instructions, existing dirty files and intended base. Keep unrelated user edits out of commits. On a mixed branch, pass repeated `--path` arguments to `start` to freeze the review scope. Evidence freshness still uses the whole source set. For non-code or already-fixed dispositions, report the evidence directly. A diagnosis-only task ends with the supported mechanism or next discriminator.
-2. Define the observable claims before editing. Put a JSON contract and any independent oracle outside the checkout. Pick checks with meaningful failure exits. Each claim uses a unique ID, an expectation and either an argument vector or a Python oracle. A check may specify a repository-relative working directory. Shell expansion requires an explicitly chosen shell.
-3. Start a run and capture the baseline that fits the task. Implement the scoped change, then replay the frozen claims. Keep the run ID returned by start. CLI commands return JSON. Exit 0 means the command succeeded or the local evidence gate passed, 1 means a checked failure, and 2 means incomplete, stale, or blocked. Start the run with a literal or symbolic base and require review for a full delivery.
-4. Where required, run a fresh GPT review of the final candidate and rerun any affected verification after repairs. Inspect the raw logs and actual behavior. The CLI verifies the checks you defined. An incorrect check can still give you a false positive.
-5. When setup prevents a real observation, name the unavailable check. Keep that claim open. A GUI account assertion needs a real driver or an explicitly identified human observation. A mock response establishes behavior only up to the mocked boundary.
+1. Inspect from the target checkout. Record the scope, applicable instructions, existing edits and intended base. Keep unrelated user edits out of commits.
+2. Write the contract before editing. Save the JSON and any independent oracle outside the checkout. Give each claim a unique ID, an expected result, and either an argument list or a Python oracle. Choose commands that exit nonzero when the claim fails. A check can set a working directory relative to the repository. To use shell expansion, call a shell explicitly.
+3. Start the run with `factory start` and save the returned run ID. If the branch contains unrelated changes, repeat `--path` for each path under review. Factory still checks freshness against the whole source set. For full delivery, pass the intended base and require review.
+4. Capture the baseline that fits the task. Implement the scoped change and rerun the saved checks. Read the raw logs and confirm they show the behavior you meant to check.
+5. If the task requires review, run a fresh GPT review on the final candidate. Rerun any affected verification after repairs.
+
+For a diagnosis-only task, stop when you can identify the cause or name the observation that would distinguish the remaining explanations. If the task needs no code change or the fix already exists, report the evidence directly.
+
+The evidence commands return JSON. Exit 0 means the command succeeded or the evidence gate passed. Exit 1 means a checked failure. Exit 2 means the result is incomplete, stale or blocked. If setup prevents a real observation, name the check and keep the claim open. A GUI check needs a real driver or an identified human observation. A mock verifies behavior up to the boundary it replaces.
 
 ## Consequential design choices
 
@@ -79,7 +83,7 @@ factory review "$run"
 factory status "$run"
 ```
 
-The `run` field identifies the run for later commands. The `--timeout` option on `factory check` limits each contract command. If your host limits how long it waits for a shell call, start the check in a persistent background session and collect its output and exit status from that session.
+Use the `run` field in later commands. Set `--timeout` on `factory check` to limit each command in the contract. If the host stops waiting before checks can finish, run the check in a persistent background session and collect its output and exit status there.
 
 A run tracks the Git source set, including staged content, tracked working files and unignored new files. In plain folders it hashes the file tree. Put generated outputs in the repository's established ignored directories or outside it. If the subject differs after a check, that attempt is blocked. Receipts persist under `FACTORY_STATE_DIR` or the user's XDG state directory. Use the same state directory for all invocations on one worktree so Factory coordinates them through the same lock. Other applications can still write to it.
 

@@ -1,6 +1,6 @@
 # Dependency updates
 
-Use the [local verification workflow](local.md) with the target repository's own package manager, registry configuration and checks. Define two local claims for every upgrade. For scanner-driven work, track the scanner result as a third claim.
+Use the target repository's package manager, registry settings and checks. Follow the [local verification workflow](local.md) to verify the resolved version and the code that uses it. If a scanner reported the problem, also track its result on the updated revision.
 
 - **Resolution.** The intended version resolves in every affected install root, across direct and transitive paths and relevant platform or optional variants.
 - **Compatibility.** The code that uses the package still works with the resolved version.

@@ -35,7 +35,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     scan = sub.add_parser(
         "inspect",
-        help="Read repository evidence and command candidates without executing project code",
+        help="Find repository instructions, skills, and suggested commands without running project code",
     )
     scan.add_argument("--repo", default=".")
     scan.add_argument(
