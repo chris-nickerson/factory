@@ -80,6 +80,10 @@ def skill_links(current):
     return {name: current / path for name, path in SKILL_RELEASE_PATHS.items()}
 
 
+def digest(content):
+    return hashlib.sha256(content).hexdigest()
+
+
 def is_managed_skill_directory(path, current, digests):
     links = skill_links(current)
     entry = path / "SKILL.md"
@@ -90,7 +94,7 @@ def is_managed_skill_directory(path, current, digests):
         and all(link_target(path / name) == str(target) for name, target in links.items())
         and entry.is_file()
         and not entry.is_symlink()
-        and hashlib.sha256(entry.read_bytes()).hexdigest() in digests
+        and digest(entry.read_bytes()) in digests
     )
 
 
@@ -103,7 +107,8 @@ def discard_skill_transition(path):
         path.rename(Path(temp) / "retired")
 
 
-def publish_default_skill(path, current, entry, replace):
+def publish_default_skill(path, current, entry):
+    replace = os.path.lexists(path)
     with tempfile.TemporaryDirectory(prefix=".factory-", dir=path.parent) as temp:
         stage = Path(temp) / "skill"
         if entry is None:
@@ -126,12 +131,19 @@ def publish_default_skill(path, current, entry, replace):
             discard_skill_transition(previous)
 
 
+def settle_release(configuration, pending):
+    configuration.update(
+        previous=pending["previous"],
+        previous_full_entry=pending.get("previous_full_entry", False),
+        commit=pending["commit"],
+    )
+
+
 def read_installation(manifest, current):
     saved = json.loads(manifest.read_text()) if manifest.exists() else {}
     pending = saved.pop("pending_release", None)
     if pending and link_target(current) == pending["release"]:
-        saved.update(previous=pending["previous"], commit=pending["commit"])
-        saved["previous_full_entry"] = pending.get("previous_full_entry", False)
+        settle_release(saved, pending)
     return saved
 
 
@@ -313,9 +325,6 @@ def install_release(
                 raise ValueError(f"Factory CLI failed to start: {probe.stderr.strip()}")
             stage.rename(release)
     installed_entry = (default_skill / "SKILL.md").read_bytes() if has_entry else None
-    previous_full_entry = bool(
-        has_entry and old and (Path(old) / "SKILL.md").read_bytes() == installed_entry
-    )
     configuration = dict(
         skill_dirs=list(map(str, skills)),
         previous=saved.get("previous"),
@@ -326,25 +335,21 @@ def install_release(
     if registration:
         configuration["skill_entry"] = registration
     entry = None
-    had_link = False
     if default_skill in destinations:
         template = release / "SKILL.md"
         if rollback and not saved.get("previous_full_entry"):
             template = release / LEGACY_STUB
-        had_link = link_target(default_skill) == str(current)
         default_skill.parent.mkdir(parents=True, exist_ok=True)
         if template.is_file():
-            content = template.read_bytes()
-            digest = hashlib.sha256(content).hexdigest()
-            if installed_entry != content:
-                entry = content
-            configuration["skill_entry"] = {"path": str(default_skill), "sha256": digest}
-            if installed_entry is not None and entry is not None:
-                configuration["skill_entry"]["replacing"] = hashlib.sha256(
-                    installed_entry
-                ).hexdigest()
-        elif has_entry or not had_link:
-            publish_default_skill(default_skill, current, None, replace=has_entry)
+            entry = template.read_bytes()
+            registration = {"path": str(default_skill), "sha256": digest(entry)}
+            if entry == installed_entry:
+                entry = None
+            elif installed_entry is not None:
+                registration["replacing"] = digest(installed_entry)
+            configuration["skill_entry"] = registration
+        elif link_target(default_skill) != str(current):
+            publish_default_skill(default_skill, current, None)
     for link, target in destinations.items():
         if link != default_skill and not link.is_symlink():
             link.parent.mkdir(parents=True, exist_ok=True)
@@ -354,7 +359,7 @@ def install_release(
         configuration["pending_release"] = {
             "release": str(release),
             "previous": old,
-            "previous_full_entry": previous_full_entry,
+            "previous_full_entry": has_entry and not (Path(old) / LEGACY_STUB).is_file(),
             "commit": commit,
         }
     else:
@@ -362,15 +367,12 @@ def install_release(
     write_json(manifest, configuration)
     replace_link(current, release)
     if entry is not None:
-        publish_default_skill(default_skill, current, entry, replace=had_link or has_entry)
-    replaced_digest = configuration.get("skill_entry", {}).pop("replacing", None)
-    if replaced_digest or switching:
-        configuration.pop("pending_release", None)
-        if switching:
-            configuration.update(
-                previous=old, previous_full_entry=previous_full_entry, commit=commit
-            )
-        write_json(manifest, configuration)
+        publish_default_skill(default_skill, current, entry)
+    pending = configuration.pop("pending_release", None)
+    if pending:
+        settle_release(configuration, pending)
+    configuration.get("skill_entry", {}).pop("replacing", None)
+    write_json(manifest, configuration)
     return report
 
 
