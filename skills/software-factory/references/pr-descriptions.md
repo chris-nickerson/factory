@@ -16,7 +16,7 @@ In this fictional PR, the author ran the same export on both revisions:
 
 > Large order exports stopped after the first page, so some orders were missing from the CSV. The exporter now requests each remaining page before it closes the file.
 >
-> The test served pages of two, two and one order. It counted page requests and CSV data rows separately and checked that the fixed export had one header row.
+> The test served pages of two, two and one order. It recorded each page request and compared the order IDs in the CSV with the five input IDs, including duplicates in the comparison. The fixed export also had one header row.
 >
 > | Five orders on three pages | Page requests | Orders in the CSV |
 > |---|---|---|
