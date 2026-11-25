@@ -38,7 +38,7 @@ A spec has three forms:
 
 | Spec | Meaning |
 | --- | --- |
-| `HARNESS` | Use this harness. The model comes from a lower-priority setting written for the same harness, or else from the role's default tier. |
+| `HARNESS` | Use this harness. A lower-priority setting still supplies the model when it names a tier or was written for the same harness. Otherwise the role's default tier applies. |
 | `HARNESS:MODEL` | Use this harness and this model. |
 | `:MODEL` | Keep the harness Factory resolved and change only the model. |
 
@@ -72,7 +72,7 @@ factory simplify --tier frontier --rounds 3 --base trunk --task '...' --check '.
 factory review RUN_ID --tier standard
 ```
 
-The [built-in policy](../scripts/defaults.toml) maps each tier to a model family for each harness. Factory's code names no model. Claude Code accepts a family name directly. Codex accepts only complete model names, so Factory asks `codex debug models` which listed model currently carries the family. If the catalog is unavailable, set the role to `codex:default` or name a complete model.
+The [built-in policy](../scripts/defaults.toml) maps each tier to a model family for each harness. Factory's code names no model. Claude Code accepts a family name directly. Codex accepts only complete model names, so Factory asks `codex debug models` which listed model currently carries the family. If the catalog is unavailable, a tier cannot be resolved. Set the role to `codex:default` or name a model yourself, which Factory then passes to Codex as written.
 
 ## Set your own defaults
 
@@ -133,7 +133,7 @@ A reduction appears in the `reductions` field of the role report, in a review's 
 
 A reviewer without a shell cannot run Git, so Factory puts the complete diffs in its prompt. If the diffs are too large to deliver that way, the review is `BLOCKED` with the reason.
 
-Each turn's receipt records the model Factory requested as `model_requested`, the tier or family it came from as `model_selector`, and what the harness reported as `model_reported`. `model_identity` is `matched`, `indeterminate` when the harness reported several models, `unrequested` when Factory passed no model, or `unreported` when the harness named none. A turn fails if the harness reports a different model than the one requested.
+Each turn's receipt records the model Factory requested as `model_requested`, the tier or family it came from as `model_selector`, and what the harness reported as `model_reported`. `model_identity` is `matched`, `indeterminate` when the report cannot settle it, `unrequested` when Factory passed no model, or `unreported` when the harness named none. A report is indeterminate when it lists several models or leaves out a revision the request pinned. A turn fails if the harness reports a different model than the one requested.
 
 ## Saved runs
 

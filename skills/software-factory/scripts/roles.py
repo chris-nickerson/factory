@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import tomllib
 
-from harness import ADAPTERS, HarnessError
+from harness import ADAPTERS, CatalogUnavailable, HarnessError
 from workspace import state_root, write_json
 
 
@@ -354,11 +354,16 @@ def bind_model(binding, policy):
     family = policy.family(harness, selector) if selector in TIERS else selector
     try:
         model = ADAPTERS[harness].resolve_model(family, policy.probe)
-    except HarnessError as error:
+    except CatalogUnavailable as error:
+        if selector not in TIERS:
+            # The caller wrote this name, so the harness can accept or refuse it.
+            return {**binding, "model": selector, "family": None}
         raise RoleError(
             f"{error} To proceed without the catalog, set the {binding['role']} "
             f"role to {harness}:{HARNESS_DEFAULT} or name a complete model."
         ) from error
+    except HarnessError as error:
+        raise RoleError(str(error)) from error
     return {**binding, "model": model, "family": family}
 
 
@@ -385,7 +390,7 @@ def reviewer(policy, *, explicit=None, writer=None):
             f"The reviewer shares a vendor with {writer['description']}, "
             "so the review is less independent."
         ]
-    elif not writer and binding["source"] == "default":
+    elif not writer:
         vendors = {ADAPTERS[name].vendor for name in policy.candidates("reviewer")}
         if len(vendors) == 1:
             binding["reductions"] = [

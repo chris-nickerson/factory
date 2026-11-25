@@ -18,12 +18,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -B -m unittest discover -s tests -v
       - run: ./factory doctor --profile local
-      - name: Qualify upgrade from the release before role bindings
+      - name: Qualify upgrade from the initial revision and the release before role bindings
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.11'
         shell: bash
         run: |
-          baseline=d2d9ab90eac801c6a13559fb144efb17095923ff
-          archived_checkout=$(mktemp -d)
-          git fetch --no-tags --depth=1 origin "$baseline"
-          git archive "$baseline" | tar -x -C "$archived_checkout"
-          python -B evals/qualify_upgrade.py "$archived_checkout"
+          for baseline in 42c934c640320d32b4772a2c6c5b3b1f3d9989dc d2d9ab90eac801c6a13559fb144efb17095923ff; do
+            archived_checkout=$(mktemp -d)
+            git fetch --no-tags --depth=1 origin "$baseline"
+            git archive "$baseline" | tar -x -C "$archived_checkout"
+            python -B evals/qualify_upgrade.py "$archived_checkout"
+          done

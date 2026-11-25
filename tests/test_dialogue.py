@@ -65,13 +65,17 @@ class DialogueTests(unittest.TestCase):
             "status": "success",
             "provider": provider,
             "text": answer,
-            "session_id": call["session_id"] or f"initial-{provider}",
+            "session_id": call["session_id"] or self.new_session(provider),
             "prompt_sha256": dialogue._digest(call["prompt"]),
             "context_sha256": dialogue._digest(call["context"]),
             "repo": str(call["repo"]),
         }
         (folder / "receipt.json").write_text(json.dumps(record))
         return record
+
+    def new_session(self, provider):
+        opened = sum(p == provider and c["session_id"] is None for p, c in self.calls)
+        return f"initial-{provider}" + (f"-{opened}" if opened > 1 else "")
 
     def invoke(self, *argv):
         args = self.parser.parse_args(["consensus", *argv])
@@ -142,7 +146,10 @@ class DialogueTests(unittest.TestCase):
         code, out = self.start("--a", "claude", "--b", "claude")
         self.assertEqual(0, code)
         self.assertEqual({"claude"}, {p for p, _ in self.calls})
-        self.assertEqual([None, None], [c["session_id"] for _, c in self.calls[:2]])
+        self.assertEqual(
+            [None, None, "initial-claude-2", "initial-claude"],
+            [c["session_id"] for _, c in self.calls],
+        )
         self.assertIn("Same-model consensus", out["reductions"][0])
         self.assertEqual(out, self.invoke("status", out["run"])[1])
 
@@ -167,6 +174,18 @@ class DialogueTests(unittest.TestCase):
             [("codex", "gpt-9.1-astra"), ("claude", "opus"), ("claude", "opus"), ("claude", "opus"), ("codex", "gpt-9.1-astra")],
             [(p, c["model"]) for p, c in self.calls],
         )
+
+    def test_resume_refuses_an_old_receipt_whose_reported_model_differs(self):
+        self.script = [OPEN, OPEN, HarnessError("offline")]
+        code, out = self.start("--b", "claude:sonnet")
+        self.assertEqual((2, "blocked"), (code, out["status"]))
+        receipt = Path(out["artifacts"]) / "opening-b/attempt-0001/call/receipt.json"
+        saved = json.loads(receipt.read_text())
+        saved.update(model_requested="sonnet", model_usage=["claude-opus-fixture"])
+        receipt.write_text(json.dumps(saved))
+        code, resumed = self.invoke("resume", out["run"])
+        self.assertEqual((2, "blocked"), (code, resumed["status"]))
+        self.assertIn("not the requested sonnet", resumed["reason"])
 
     def test_wrong_ref_and_quoted_status_not_confirmation(self):
         self.script = [

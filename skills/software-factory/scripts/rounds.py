@@ -187,8 +187,8 @@ def call_context(run, record, folder):
                 record["input"],
             )
         )
-    # The restricted file tools cannot read our private state directory. The
-    # harness delivers this separate context as a file with no argv size limit.
+    # The restricted file tools cannot read our private state directory, so the
+    # harness delivers this context beside the prompt, whatever its size.
     delta = diff.read_text(encoding="utf-8", errors="replace")
     tools = (
         "Use local Bash for inspection and repository tests as needed. Keep temporary test output "

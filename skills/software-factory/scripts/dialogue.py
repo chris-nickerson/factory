@@ -12,7 +12,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
-from harness import run_turn
+from harness import model_identity, run_turn
 import roles
 from supervision import turn_stopped
 from workspace import repo_root, snapshot, state_root, workspace_lock, write_json
@@ -242,6 +242,8 @@ def _response(directory, meta, step, actor, prompt, context, session=None):
                 raise DialogueError(f"Mismatched provider receipt at {attempt}.")
             if result.get("model_requested", request["model"]) != request["model"]:
                 raise DialogueError(f"Mismatched model in the receipt at {attempt}.")
+            if "model_identity" not in result and "model_requested" in result:
+                model_identity(result, result)
             if session and result.get("session_id") != session:
                 raise DialogueError(f"Unexpected replacement session at {attempt}.")
             return result

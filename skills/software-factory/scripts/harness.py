@@ -22,6 +22,10 @@ class HarnessError(RuntimeError):
     """The provider could not produce a trustworthy, complete turn."""
 
 
+class CatalogUnavailable(HarnessError):
+    """The harness could not list its models, so a family cannot be resolved."""
+
+
 # Linux refuses a single argument longer than 128 KiB.
 ARGUMENT_MAX_BYTES = 60_000
 
@@ -163,7 +167,7 @@ class Codex:
                 return _family_member(catalog, selector)
             except (ValueError, KeyError, TypeError, AttributeError):
                 continue
-        raise HarnessError(
+        raise CatalogUnavailable(
             f"Codex did not provide a model catalog to resolve {selector!r}."
         )
 
@@ -217,21 +221,19 @@ class Codex:
             argv.extend(["--model", run["model_requested"]])
         if run["has_context"]:
             context = (directory / "context.txt").read_text(encoding="utf-8")
-            if len(context.encode()) > ARGUMENT_MAX_BYTES:
+            instructions = "developer_instructions=" + json.dumps(
+                context, ensure_ascii=False
+            )
+            if len(instructions.encode()) > ARGUMENT_MAX_BYTES:
                 # Codex takes these instructions as one argument, and the OS
                 # limits an argument's size. Its sandbox can read the file.
-                context = (
+                instructions = "developer_instructions=" + json.dumps(
                     "The coordinator's instructions for this turn are in the file "
                     f"{directory / 'context.txt'}. They are too long to include here "
                     "and carry the same authority as this message. Read the whole "
                     "file before you do anything else."
                 )
-            argv.extend(
-                [
-                    "-c",
-                    "developer_instructions=" + json.dumps(context, ensure_ascii=False),
-                ]
-            )
+            argv.extend(["-c", instructions])
         if run["requested_session"]:
             argv.extend(["resume", run["requested_session"]])
         return [*argv, "-"], env
@@ -321,7 +323,14 @@ def _within(parts, name):
     )
 
 
-def _model_identity(record, result):
+def model_identity(record, result):
+    """Say how far the reported model confirms the requested one.
+
+    `matched` means one reported model carries the request. `indeterminate`
+    means the report cannot settle it: several models were reported, or the
+    request pins a revision the report leaves out. A report that excludes the
+    request raises.
+    """
     requested = record["model_requested"]
     reported = result.get("model_usage", [])
     if not reported:
@@ -329,14 +338,14 @@ def _model_identity(record, result):
     if not requested:
         return "unrequested"
     wanted = _name_parts(requested.split("[")[0])
-    if not any(
-        _within(wanted, _name_parts(name)) or _within(_name_parts(name), wanted)
-        for name in reported
-    ):
-        raise HarnessError(
-            f"The harness reports {', '.join(reported)}, not the requested {requested}"
-        )
-    return "matched" if len(reported) == 1 else "indeterminate"
+    names = [_name_parts(name) for name in reported]
+    if any(_within(wanted, name) for name in names):
+        return "matched" if len(reported) == 1 else "indeterminate"
+    if any(_within(name, wanted) for name in names):
+        return "indeterminate"
+    raise HarnessError(
+        f"The harness reports {', '.join(reported)}, not the requested {requested}"
+    )
 
 
 def _supervise(directory):
@@ -386,7 +395,11 @@ def _supervise(directory):
         ):
             raise HarnessError("Provider returned a different session ID")
         record.update(
-            result, model_identity=_model_identity(record, result), status="success"
+            model_reported=result["model_reported"],
+            model_usage=result.get("model_usage", []),
+        )
+        record.update(
+            result, model_identity=model_identity(record, result), status="success"
         )
     except (
         HarnessError,
@@ -424,7 +437,7 @@ def run_turn(
     `model=None` the harness chooses its own model.
     `selector` records the tier or family the caller resolved `model` from. The
     receipt's `model_identity` says whether the reported model matched the
-    request, or that the harness reported none.
+    request. A harness that reports no model leaves `model_reported` null.
     """
     adapter = ADAPTERS.get(provider)
     if adapter is None:

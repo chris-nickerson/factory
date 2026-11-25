@@ -166,8 +166,9 @@ class HarnessTests(unittest.TestCase):
 
     def test_receipt_says_how_far_model_identity_was_established(self):
         self.assertEqual(self.turn()["model_identity"], "matched")
-        for longer_form in ("opus[1m]", "claude-opus-fixture-20260101"):
-            self.assertEqual(self.turn(model=longer_form)["model_identity"], "matched")
+        self.assertEqual(self.turn(model="opus[1m]")["model_identity"], "matched")
+        pinned = self.turn(model="claude-opus-fixture-20260101")
+        self.assertEqual(pinned["model_identity"], "indeterminate")
         self.assertEqual(self.turn(selector="standard")["model_selector"], "standard")
         unrequested = self.turn(model=None)
         self.assertEqual(unrequested["model_identity"], "unrequested")
@@ -178,6 +179,7 @@ class HarnessTests(unittest.TestCase):
             self.assertRaisesRegex(HarnessError, "not the requested"),
         ):
             self.turn(model="claude-sonnet-fixtur")
+        self.assertEqual(self.receipt()["model_reported"], "claude-sonnet-fixture")
         with patch.dict(os.environ, {"HARNESS_CASE": "helper"}):
             self.assertEqual(self.turn()["model_identity"], "indeterminate")
         silent = self.turn("codex", model="gpt-fixture")
@@ -215,13 +217,13 @@ class HarnessTests(unittest.TestCase):
     def test_codex_reads_instructions_too_long_for_an_argument_from_their_file(self):
         self.turn("codex", context="short instructions")
         self.assertIn("short instructions", " ".join(self.observed()["argv"]))
-        long_context = "branch delta line\n" * 20_000
-        self.turn("codex", context=long_context)
-        argv = self.observed()["argv"]
-        self.assertLess(max(map(len, argv)), 60_000)
-        instructions = next(arg for arg in argv if "developer_instructions" in arg)
-        self.assertIn(str(self.output.resolve() / "context.txt"), instructions)
-        self.assertEqual((self.output / "context.txt").read_text(), long_context)
+        for long_context in ("branch delta line\n" * 20_000, "\x01" * 30_000):
+            self.turn("codex", context=long_context)
+            argv = self.observed()["argv"]
+            self.assertLess(max(len(arg.encode()) for arg in argv), 60_000)
+            instructions = next(arg for arg in argv if "developer_instructions" in arg)
+            self.assertIn(str(self.output.resolve() / "context.txt"), instructions)
+            self.assertEqual((self.output / "context.txt").read_text(), long_context)
 
     def test_turn_needs_a_harness_that_declares_it(self):
         for kwargs, missing in (

@@ -82,6 +82,8 @@ class RoleTests(unittest.TestCase):
     def test_one_vendor_and_an_unknown_writer_leave_independence_unverified(self):
         use_machine(self, "codex")
         self.assertIn("unverified", self.reviewer()["reductions"][0])
+        pinned = self.reviewer(explicit="codex:default")
+        self.assertIn("unverified", pinned["reductions"][0])
         use_machine(self, "codex", "claude")
         self.assertEqual(self.reviewer()["reductions"], [])
 
@@ -180,6 +182,7 @@ class RoleTests(unittest.TestCase):
         use_machine(self, "codex", catalog=None)
         self.assertIsNone(self.reviewer(explicit="codex:default")["model"])
         self.assertEqual(self.reviewer(explicit="codex:gpt-x")["model"], "gpt-x")
+        self.assertEqual(self.reviewer(explicit="codex:o9")["model"], "o9")
         with self.assertRaisesRegex(roles.RoleError, "codex:default"):
             self.reviewer()
 
