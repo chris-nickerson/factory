@@ -176,10 +176,10 @@ def installed_skill_release(link, destination):
     return f"{content}:{modes}"
 
 
-def snapshot(repo, *, plain_directory=False, follow_symlinks=True):
+def snapshot(repo, *, plain_directory=False, worktree_only=False):
     """Hash Git's source set, index and HEAD, or all files in a plain directory.
 
-    With follow_symlinks disabled, hash the link itself without reading its target.
+    A worktree-only fingerprint omits Git metadata and hashes symlinks as links.
     """
     repo = Path(repo).resolve()
     digest = hashlib.sha256()
@@ -194,9 +194,11 @@ def snapshot(repo, *, plain_directory=False, follow_symlinks=True):
     )
     gitlinks = set()
     if is_git:
-        field(git(repo, "rev-parse", "--verify", "HEAD", check=False).stdout.strip())
+        if not worktree_only:
+            field(git(repo, "rev-parse", "--verify", "HEAD", check=False).stdout.strip())
         index = git(repo, "ls-files", "--stage", "-z").stdout
-        field(index)
+        if not worktree_only:
+            field(index)
         paths = set()
         for entry in index.split(b"\0"):
             if entry:
@@ -220,20 +222,24 @@ def snapshot(repo, *, plain_directory=False, follow_symlinks=True):
         }
 
     for name in sorted(paths):
-        field(name)
         p = repo / os.fsdecode(name)
         if p.parent.resolve() != p.parent:
-            field(b"replaced ancestor")
+            if not worktree_only:
+                field(name)
+                field(b"replaced ancestor")
             continue
         try:
             mode = p.lstat().st_mode
         except (FileNotFoundError, NotADirectoryError):
-            field(b"missing")
+            if not worktree_only:
+                field(name)
+                field(b"missing")
             continue
+        field(name)
         field(str(mode).encode())
         if stat.S_ISLNK(mode):
             field(os.fsencode(os.readlink(p)))
-            if not follow_symlinks:
+            if worktree_only:
                 continue
             try:
                 dest = p.resolve(strict=True)
@@ -264,7 +270,7 @@ def snapshot(repo, *, plain_directory=False, follow_symlinks=True):
                 snapshot(
                     p,
                     plain_directory=not (p / ".git").exists(),
-                    follow_symlinks=follow_symlinks,
+                    worktree_only=worktree_only,
                 ).encode()
             )
         elif stat.S_ISREG(mode):

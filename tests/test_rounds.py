@@ -744,6 +744,33 @@ class RoundsTests(unittest.TestCase):
         self.assertEqual(code, 0, complete)
         self.assertEqual(complete["rounds"][0]["remote_head"], self.git("rev-parse", "HEAD"))
 
+    def test_resume_does_not_push_when_checked_bytes_change_after_commit(self):
+        (self.repo / ".gitattributes").write_text("calc.py text eol=lf\n")
+        self.git("add", ".gitattributes")
+        self.git("commit", "-qm", "Normalize source line endings")
+        before = self.git("rev-parse", "HEAD")
+        with patch.object(
+            rounds, "push_checkpoint", side_effect=rounds.Pending("Interrupted before push")
+        ):
+            code, pending = self.invoke(*self.start, "--rounds", "1", "--push", "fixture")
+        self.assertEqual(code, 2, pending)
+        checkpoint = self.git("rev-parse", "HEAD")
+        self.assertNotEqual(checkpoint, before)
+
+        source = self.repo / "calc.py"
+        original = source.read_bytes()
+        source.write_bytes(original.replace(b"\n", b"\r\n"))
+        self.assertEqual(self.git("diff", "--", "calc.py"), "")
+        code, blocked = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 2, blocked)
+        self.assertFalse(self.git("ls-remote", "fixture", "refs/heads/feature"))
+
+        source.write_bytes(original)
+        code, complete = self.invoke("--resume", pending["run"])
+        self.assertEqual(code, 0, complete)
+        self.assertEqual(complete["rounds"][0]["remote_head"], checkpoint)
+        self.assertEqual(len(self.turns.read_text().splitlines()), 2)
+
     def test_scope_and_dirty_tree_preserve_work(self):
         with patch.dict(os.environ, FIXTURE_MODE="outside"):
             code, result = self.invoke(*self.start)

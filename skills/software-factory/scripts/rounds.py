@@ -288,7 +288,7 @@ def consume_call(run, record, folder, recover):
 
 def check_candidate(run, record, folder):
     before, _ = candidate(run, folder)
-    working_inputs = snapshot(run["repo"], follow_symlinks=False)
+    working_inputs = snapshot(run["repo"], worktree_only=True)
     if rev(run["repo"], "HEAD") != record["input"]:
         raise Pending("The checked-out revision changed before checks started.")
     record["checks"] = []
@@ -318,7 +318,7 @@ def check_candidate(run, record, folder):
             raise Pending(
                 "Checks changed the candidate or its revision. Inspect the changes and resume."
             )
-        if snapshot(run["repo"], follow_symlinks=False) != working_inputs:
+        if snapshot(run["repo"], worktree_only=True) != working_inputs:
             raise Pending(
                 "Checks changed the working inputs. Inspect the changes and resume."
             )
@@ -328,7 +328,7 @@ def check_candidate(run, record, folder):
 
 def ensure_checked_working_inputs(run, record):
     if "working_inputs" in record and (
-        snapshot(run["repo"], follow_symlinks=False) != record["working_inputs"]
+        snapshot(run["repo"], worktree_only=True) != record["working_inputs"]
     ):
         raise Pending("Working inputs changed after checks. Restore the checked candidate before resuming.")
 
@@ -414,6 +414,7 @@ def execute(run, folder, recover=False, accepted_head=None):
                 raise Pending(
                     "Worktree or branch moved before the checkpoint was confirmed."
                 )
+            ensure_checked_working_inputs(run, record)
             if run["remote"]:
                 expected = (
                     run["original_remote"]
