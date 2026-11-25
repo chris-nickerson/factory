@@ -60,6 +60,16 @@ Example contract for a public library function, with a separate engineering chec
 
 An oracle is copied into the frozen run contract. Factory executes it in a new Python process with the target as its working directory. Import the target as a real consumer would. For a local source import, add `os.getcwd()` to the oracle's module search path. Let failed assertions or other errors exit nonzero. For an external service, verify the responding build identity inside the oracle. Keep the contract and any attached state outside the workspace.
 
+For a check-only run, save the contract as `../contract.json` and run these commands from the project directory:
+
+```sh
+run=$(factory start --repo . --task "Verify addition" --contract ../contract.json |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["run"])')
+factory check "$run"
+```
+
+For a delivery that requires code review:
+
 ```sh
 factory inspect --repo .
 run=$(factory start --repo . --task "Fix incorrect addition" --require-review --base HEAD \
