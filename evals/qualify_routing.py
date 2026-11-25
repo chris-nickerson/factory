@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL_NAMED_BY_USER = "opus"
 CASES = {
     "existing-pr-round-limit": (
-        "Babysit this existing PR for exactly one round. You already fixed failed CI, "
+        "Use Software Factory to babysit this existing PR for exactly one round. You already fixed failed CI, "
         "pushed the fix and read back the new head, open threads and replacement checks. "
         "Those checks are running. I only asked for this round.",
         "PR review workflow", True,
