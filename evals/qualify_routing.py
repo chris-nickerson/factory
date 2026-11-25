@@ -117,7 +117,7 @@ DELIVERY_SCHEMA = {
     **SCHEMA,
     "properties": {
         **SCHEMA["properties"],
-        "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "publish UI evidence", "answer status and stop", "hand off to human"]},
+        "next_action": {"enum": ["obtain design consensus", "implement", "continue verification", "publish UI evidence", "end while required work is pending", "hand off to human"]},
         "ui_evidence_available": {"type": "boolean", "description": "The requested screen has been demonstrated."},
     },
     "required": [*SCHEMA["required"], "next_action", "ui_evidence_available"],
