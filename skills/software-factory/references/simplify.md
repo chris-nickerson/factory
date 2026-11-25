@@ -28,7 +28,7 @@ factory simplify --resume RUN_ID
 
 Use the same state directory for every command. Before launching another turn, resume checks for successful provider calls, existing commits and pushes whose receipts were lost.
 
-| If the run stopped here | What to do |
+| Situation | What to do |
 | --- | --- |
 | Before Git created the commit, for example after a hook rejected its title | Retry with `--resume RUN_ID --recover --commit-subject TEXT`. The new title applies to this checkpoint and later rounds. |
 | After Git created a commit whose message has no run marker | Inspect the local commit. To accept that exact commit on resume, pass `--accept-checkpoint FULL_SHA`. Its parent, tree, branch and clean worktree must match the checked round. |

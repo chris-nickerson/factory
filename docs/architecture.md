@@ -11,6 +11,28 @@ Factory runs on the developer's machine. The target repository owns its instruct
 
 In Git, the fingerprint includes HEAD, the index, tracked working files and unignored new files. A staged change still matters if an unstaged edit reverses it. A plain directory uses its filesystem contents. The journal and its digests share the local account's trust boundary. A check can also depend on ignored files, executables from PATH, or a script referenced by `argv`. For a service check, observe which build or account actually answered. [Consumer check guidance](../skills/software-factory/references/local.md#when-a-model-controls-the-outcome)
 
+## Try Factory offline
+
+Run this example offline from the Factory checkout. You need Git and Python, and you can use the checkout's `./factory` directly. The example creates a temporary project, checks its file, then edits the file so you can see what happens to the earlier result.
+
+```sh
+demo=$(mktemp -d)
+mkdir "$demo/project"
+printf 'ready\n' > "$demo/project/answer.txt"
+cat > "$demo/contract.json" <<'JSON'
+[{"id":"ready","expect":"answer.txt contains the line ready","argv":["grep","-Fx","ready","answer.txt"]}]
+JSON
+
+run=$(./factory start --repo "$demo/project" --task "Verify readiness" \
+  --contract "$demo/contract.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run"])')
+./factory check "$run"                  # VERIFIED
+printf 'pending\n' > "$demo/project/answer.txt"
+./factory status "$run"                 # INCOMPLETE, claim STALE (exit 2)
+./factory check "$run"                  # FAILED, claim FAIL (exit 1)
+```
+
+After you edit `answer.txt`, `./factory status "$run"` reports the earlier check result as `STALE` without rerunning the check. Run `./factory check "$run"` to check the current file. In this example, the new check fails because the file now says `pending`.
+
 ## Reach agreement between two models
 
 `factory consensus design` asks Codex and Opus to compare alternatives and state what evidence would change their minds. In `diagnosis`, each must connect a proposed cause to the symptom or name the missing observation. A confirmed diagnosis may be inconclusive.

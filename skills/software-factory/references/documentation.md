@@ -63,7 +63,7 @@ Make claims readers can check. Run example commands as written and verify the li
 1. Read the changed text with the issue closed. Check whether a new reader can identify the next action, its conditions and its expected result.
 2. Trace changed strings to their consumers. Preserve protocol lines, pinned prompts, fixtures, license text and exact output that callers rely on. Keep existing public links and anchors usable.
 3. Exercise changed procedures, help and diagnostics through their entry points. For routing, check a neighboring request with a different correct outcome. Compare what the host loaded and what the agent attempted.
-4. Review comments and docstrings beside the code. Verify workaround causes before editing their explanations.
+4. [Review the changed comments and docstrings](#review-comments-in-the-diff) beside the code.
 
 Use sentence length and terminology reports to find passages worth reading. Judge the result by whether readers can complete the task and preserve the contract.
 
