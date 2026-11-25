@@ -35,7 +35,7 @@ After you edit `answer.txt`, `./factory status "$run"` reports the earlier check
 
 ## Reach agreement between two models
 
-`factory consensus design` asks Codex and Opus to compare alternatives and state what evidence would change their minds. In `diagnosis`, each must connect a proposed cause to the symptom or name the missing observation. A confirmed diagnosis may be inconclusive.
+`factory consensus design` asks two participants to compare alternatives and state what evidence would change their minds. Factory fills the two from different vendors when it can. In `diagnosis`, each must connect a proposed cause to the symptom or name the missing observation. A confirmed diagnosis may be inconclusive.
 
 Each participant studies the same evidence before it sees the other's conclusion, which keeps the second opinion independent. The coordinator saves both opening reports, then alternates replies in the original sessions. Each proposal has a numbered turn, and agreement must acknowledge that specific turn. The discussion closes when both participants endorse the same proposal. An exhausted exchange budget produces an unresolved result with the last turn available for inspection. [Dialogue](../skills/software-factory/scripts/dialogue.py)
 
@@ -45,7 +45,7 @@ For example, if a deleted item still appears in a list, one participant might su
 
 ```mermaid
 flowchart LR
-    Edit["Opus edits"] --> Check["Factory checks the tree"]
+    Edit["Simplifier edits"] --> Check["Factory checks the tree"]
     Check --> Assess["Same session assesses the results"]
     Assess -->|Repair| Edit
     Assess -->|Verified| Commit["Commit the checked tree"]
@@ -56,13 +56,23 @@ flowchart LR
 
 The coordinator pins the task, base, permitted paths, checks and number of rounds. Each round opens a fresh session that starts from the current branch. Its first user message is the exact versioned prompt. Requirements and the branch diff travel in a separate context channel, so you can inspect which prompt actually ran. [Prompt](../skills/software-factory/references/reconsider-from-first-principles.v1.txt)
 
-The assessment resumes the editing session with read-only tools. A failing check requires repair even if the model accepts its work. A round can keep the code as it stands, and the selected number of rounds still runs. [Round coordinator](../skills/software-factory/scripts/rounds.py) · [Provider adapter](../skills/software-factory/scripts/harness.py)
+The assessment resumes the editing session with read-only tools. A failing check requires repair even if the model accepts its work. A round can keep the code as it stands, and the selected number of rounds still runs. [Round coordinator](../skills/software-factory/scripts/rounds.py) · [Harness adapters](../skills/software-factory/scripts/harness.py)
 
-**Provider calls.** The coordinator records each phase before contacting a provider. The harness records the request and session. On resume, Factory uses those records to determine what happened to an interrupted call.
+**Harness turns.** The coordinator records each phase before starting a turn. The harness records the request and session. On resume, Factory uses those records to determine what happened to an interrupted call.
 
 **Working files and Git trees.** Factory compares the working files before and after each check, before assessment, before committing and before confirming the checkpoint. The comparison uses the bytes on disk and treats symlinks as links. It can detect changes that Git normalization would hide. Staging can change the index while the working files stay the same, so Factory uses a temporary index to compute the expected tree and compares it with the committed tree. Older rounds without a saved fingerprint of the working files still use the Git tree check.
 
 **Commit recovery and publication.** If Factory stops after a commit but before saving its receipt, it checks the parent, tree, branch and commit identity on resume. When the user requests publication, Factory records the push destination, verifies the expected remote head and reads it back after pushing. The explicit lease protects a remote branch that moved independently. [Git checkpoints](../skills/software-factory/scripts/checkpoints.py) · [Recovery and publication tests](../tests/test_rounds.py)
+
+## Fill a role
+
+Review, simplification and consensus are roles. Each role names the capabilities it needs, such as read-only turns, editing, a sandboxed shell and session resume. Each harness adapter declares the capabilities it provides and builds the restricted command for each kind of turn. A role can be filled only by a harness that declares everything the role needs, so a configuration mistake cannot hand an editing job to a harness with no sandbox. [Harness adapters](../skills/software-factory/scripts/harness.py)
+
+To fill a role, Factory takes the flag for this run, then the approved project configuration, then the user's configuration, then a default for the machine. The default depends on which CLIs are installed and signed in and which one hosts the session. The reviewer default avoids the vendor that last changed the code. The result is a binding: the harness, the model, the source of the choice and any assurance it reduces. A run saves its bindings when it starts and reuses them on resume. [Role resolution](../skills/software-factory/scripts/roles.py) · [Roles, harnesses and models](../skills/software-factory/references/roles.md)
+
+Model names stay out of the code. A role asks for a tier, and a [policy file](../skills/software-factory/scripts/defaults.toml) maps each tier to a model family for each harness. The adapter turns a family into the argument its CLI accepts. After the turn, the harness compares the model it requested with the model the CLI reports. A mismatch fails the turn, and a CLI that reports no model is recorded as such.
+
+To support another harness, add one adapter class with its capabilities, its command for each turn and its result parser. Then add its tier families and its place in the default harness order to the policy file. [Role tests](../tests/test_roles.py)
 
 ## Boundaries and tradeoffs
 
@@ -71,5 +81,6 @@ The assessment resumes the editing session with read-only tools. A failing check
 | Runtime | The CLI and skill ship together and use only Python's standard library. All state is local. Resuming a run needs its saved state and workspace. [Installation](../skills/software-factory/scripts/installation.py) |
 | Processes | A supervisor owns the child process group and holds the workspace lock while it cleans up. Invocations on the same worktree share the lock when they use the same state directory. A service that deliberately detaches needs its own lifecycle handling. [Interruption tests](../tests/test_supervision.py) |
 | Judgment | The local engine can verify a weak contract perfectly. Independent consumer checks, fresh reviews and later corrections expose different failures. [Live evaluation](../evals/qualify.py) |
+| Independence | A reviewer or second participant from another vendor shares fewer blind spots with the author. With one harness, Factory runs the role anyway and records the reduced assurance in the receipt. [Roles](../skills/software-factory/references/roles.md#reduced-assurance) |
 | Agreement | Two independent openings reduce anchoring. Agreement records a decision about one proposal and may conclude that the evidence is insufficient. [Dialogue](../skills/software-factory/scripts/dialogue.py) |
 | Feedback | A later observation belongs to its original source revision. Changing a shared practice needs a scoped regression case and controls. [Outcome transfer experiment](../evals/outcome_transfer.py) |

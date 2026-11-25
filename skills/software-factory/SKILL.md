@@ -1,13 +1,13 @@
 ---
 name: software-factory
-description: Use Factory to verify engineering changes, review a scoped diff, or get an independent design or diagnosis from GPT and Opus. Use it for Opus simplification rounds sized to a PR, measured hill-climbing, dependency upgrades and advisory remediation, PR descriptions, and documentation.
+description: Use Factory to verify engineering changes, get an independent review of a scoped diff, or get a design or diagnosis from two models that investigate independently, such as GPT and Claude. Use it for simplification rounds sized to a PR, measured hill-climbing, dependency upgrades and advisory remediation, PR descriptions, and documentation.
 ---
 
 # Software Factory
 
 Use `scripts/factory` in this skill's real directory or a matching installed `factory`. Run `factory inspect --repo PATH` and pass `--path` for the affected component. Read the repository instructions it finds. The scan lists suggested commands and their sources. Choose commands that exercise the requested behavior.
 
-Independent review requires Codex. Simplification requires Claude Code. Consensus requires both. If the task needs both providers, run `factory doctor --profile paired`. If the host lacks the provider CLIs, run `factory doctor --profile local` and use the [local evidence workflow](references/local.md).
+Factory gives review, simplification and consensus to separate model sessions. Each job is a role, and Factory chooses the harness and model that fill it from the agent CLIs on this machine. You are the host, whichever agent you are. Run `factory roles` to see what each role resolved to and why. When the user names a harness or model for a job, pass it with that role's flag. When a result reports reduced assurance, such as a reviewer from the same vendor as the author, include it in your handoff. If no role can be filled, use the [local evidence workflow](references/local.md). [Roles, harnesses and models](references/roles.md)
 
 ## Carry the request into execution
 
@@ -28,7 +28,7 @@ Use the brief to choose a workflow and guide your next actions. Pass the relevan
 | Write, revise or clean up documentation | Use the [Factory writing guide](references/documentation.md). |
 | Prepare a PR for review or babysit one | Use the [PR review workflow](references/delivery.md#pr-review-workflow). |
 | Attach a real-world correction to a prior run | Use `factory outcome` with the relevant run and observed behavior. [Later outcomes](references/local.md#later-outcomes) |
-| Deliver an implementation with GPT and Opus | Compose consensus if requested, GPT implementation, the size-based Opus rounds, a fresh GPT review and final behavioral checks. [Delivery and continuation](references/delivery.md) |
+| Deliver an implementation with simplification and independent review | Compose consensus if requested, your implementation, the size-based simplification rounds, a fresh independent review and final behavioral checks. [Delivery and continuation](references/delivery.md) |
 
 For a check-only request, run the local checks. If the request requires independent review, include the review step. For verification-only and review-only requests, report the requested results and stop.
 
@@ -40,7 +40,7 @@ Before freezing acceptance checks, [surface consequential design choices](refere
 
 When implementing or reviewing a change, [choose which tests to keep](references/local.md#choose-which-tests-to-keep). Name the regression that existing coverage would miss before expanding the suite.
 
-When the user authorizes changes, run Factory simplification on every nontrivial PR, including local changes intended for a PR. Skip it for trivial edits such as typos or mechanical formatting. Select one fresh Opus round for a straightforward, localized behavior change, two for a moderate change with interacting pieces, and three for a large change or one with substantial access, data, or compatibility risk. Use scope and consequences to choose the tier. Pass the count with `--rounds` and finish the scheduled rounds even when an earlier round makes no edits.
+When the user authorizes changes, run Factory simplification on every nontrivial PR, including local changes intended for a PR. Skip it for trivial edits such as typos or mechanical formatting. Select one fresh simplification round for a straightforward, localized behavior change, two for a moderate change with interacting pieces, and three for a large change or one with substantial access, data, or compatibility risk. Use scope and consequences to choose the count. Pass the count with `--rounds` and finish the scheduled rounds even when an earlier round makes no edits. The same consequences decide the model. Each role has a default [model tier](references/roles.md#choose-a-model-tier). Pass `--tier frontier` to `consensus` or `simplify` for a hard design, a diagnosis with competing explanations, or a change where a missed defect would be costly. Keep the default for routine work.
 
 For prose changes, use the [Factory writing guide](references/documentation.md). For code changes, include comment and documentation review in the task brief. Before final review, [review the changed comments and documentation](references/documentation.md#review-comments-in-the-diff), including any added during repairs.
 
@@ -48,4 +48,4 @@ Choose evidence by what controls the outcome. If the product depends on a model 
 
 Preserve the requested stopping point. For investigation, establish the observed symptom, test a competing explanation and return the mechanism or missing discriminator. For local fixes, use the repository's normal entry points and separate required build checks from evidence of behavior. For a review-only task, keep the change read-only and substantiate each finding with its real trigger.
 
-Use the selected model and harness for a named profile. Verify any substituted method with the user if it changes a required assurance. Transport errors, missing access, stale evidence and partial coverage belong in the handoff. Use receipts to name the revision, evidence, verdict and remaining work.
+Use the harness and model Factory resolved for each role. Verify any substituted method with the user if it changes a required assurance. Transport errors, missing access, stale evidence and partial coverage belong in the handoff. Use receipts to name the revision, evidence, verdict and remaining work.

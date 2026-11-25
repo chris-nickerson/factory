@@ -1,5 +1,6 @@
 """Exercise the installed command boundary, with real repos and independent oracles."""
 
+import hashlib
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
@@ -22,7 +23,12 @@ class FactoryTests(unittest.TestCase):
         self.home = Path(self.temporary.name).resolve()
         self.repo = self.home / "target"
         self.repo.mkdir()
-        self.env = dict(os.environ, FACTORY_STATE_DIR=str(self.home / "state"))
+        self.env = dict(
+            os.environ,
+            FACTORY_STATE_DIR=str(self.home / "state"),
+            XDG_CONFIG_HOME=str(self.home / "config"),
+            FACTORY_HOST="none",
+        )
         self.git("init", "-q", "-b", "trunk")
         self.git("config", "user.email", "fixture@example.invalid")
         self.git("config", "user.name", "fixture")
@@ -223,8 +229,100 @@ class FactoryTests(unittest.TestCase):
         )
         fake.chmod(0o755)
         self.env["PATH"] = str(bin_dir) + os.pathsep + self.env["PATH"]
-        report = self.cli("review", run, "--timeout", "1", code=1)
+        report = self.cli(
+            "review", run, "--timeout", "1", "--model", "gpt-fixture", code=1
+        )
         self.assertEqual(report["review"], "FINDINGS")
+        reviewer = report["review_receipt"]["reviewer"]
+        self.assertEqual(
+            (reviewer["harness"], reviewer["model"], reviewer["source"]),
+            ("codex", "gpt-fixture", "flag"),
+        )
+        self.assertEqual(report["review_receipt"]["model_identity"], "unreported")
+
+    def test_reviewer_without_a_shell_reads_the_diffs_and_states_the_reduction(self):
+        run = self.start(extra=("--require-review",))
+        (self.repo / "maths.py").write_text("def add(a,b): return 123\n")
+        self.git("add", "maths.py")
+        (self.repo / "maths.py").write_text("def add(a,b): return a+b\n")
+        (self.repo / "notes.txt").write_text("new")
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "claude"
+        fake.write_text(
+            "#!/usr/bin/env python3\nimport sys,json\ns=sys.stdin.read()\nargs=sys.argv\n"
+            "assert '+def add(a,b): return 123' in s and '+def add(a,b): return a+b' in s and 'notes.txt' in s\n"
+            "assert 'Bash' not in ' '.join(args) and args[args.index('--model')+1]=='fable'\n"
+            "print(json.dumps({'subtype':'success','session_id':args[args.index('--session-id')+1],"
+            "'modelUsage':{'claude-fable-fixture':{}},'result':'Correct.\\nVERDICT: CLEAR'}))\n"
+        )
+        fake.chmod(0o755)
+        self.env["PATH"] = str(bin_dir) + os.pathsep + self.env["PATH"]
+        self.env["FACTORY_HOST"] = "claude"
+        self.cli("check", run, code=2)
+        report = self.cli("review", run, "--reviewer", "claude")
+        self.assertEqual((report["status"], report["review"]), ("VERIFIED", "CLEAR"))
+        self.assertIn("shares a vendor with the hosting session", report["review_reductions"][0])
+        receipt = report["review_receipt"]
+        self.assertEqual(receipt["reviewer"]["selector"], "frontier")
+        self.assertEqual(receipt["model_reported"], "claude-fable-fixture")
+        self.assertEqual(receipt["model_identity"], "matched")
+        self.assertEqual(self.cli("status", run)["review_reductions"], report["review_reductions"])
+
+    def test_review_that_cannot_find_a_reviewer_replaces_an_earlier_clear(self):
+        run = self.start(extra=("--require-review",))
+        (self.repo / "maths.py").write_text("def add(a,b): return a+b\n")
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "codex"
+        fake.write_text(
+            "#!/usr/bin/env python3\nimport json,uuid\n"
+            "for event in [{'type':'thread.started','thread_id':str(uuid.uuid4())},"
+            "{'type':'item.completed','item':{'type':'agent_message','text':'Fine.\\nVERDICT: CLEAR'}},"
+            "{'type':'turn.completed'}]: print(json.dumps(event))\n"
+        )
+        fake.chmod(0o755)
+        path = self.env["PATH"]
+        self.env["PATH"] = str(bin_dir) + os.pathsep + path
+        self.cli("check", run, code=2)
+        self.assertEqual(
+            self.cli("review", run, "--reviewer", "codex:default")["review"], "CLEAR"
+        )
+        fake.unlink()
+        git_only = self.home / "git-only"
+        git_only.mkdir()
+        (git_only / "git").symlink_to(shutil.which("git"))
+        (git_only / "python3").symlink_to(sys.executable)
+        self.env["PATH"] = str(git_only)
+        blocked = self.cli("review", run, code=2)
+        self.assertEqual((blocked["status"], blocked["review"]), ("INCOMPLETE", "BLOCKED"))
+        self.assertIn("No installed", blocked["review_receipt"]["reason"])
+
+    def test_review_receipt_from_the_previous_release_still_gates(self):
+        run = self.start(extra=("--require-review",))
+        (self.repo / "maths.py").write_text("def add(a,b): return a+b\n")
+        self.cli("check", run, code=2)
+        folder = Path(self.cli("status", run, code=2)["artifacts"])
+        report = folder / "review-old.md"
+        report.write_text("Correct.\nVERDICT: CLEAR")
+        data = json.loads((folder / "state.json").read_text())
+        data["reviews"].append(
+            dict(
+                subject=self.cli("status", run, code=2)["subject"],
+                base=data["base"],
+                paths=[],
+                status="CLEAR",
+                report=report.name,
+                sha256=hashlib.sha256(report.read_bytes()).hexdigest(),
+                session_id="old",
+            )
+        )
+        (folder / "state.json").write_text(json.dumps(data))
+        legacy = self.cli("status", run)
+        self.assertEqual(
+            (legacy["status"], legacy["review"], legacy["review_reductions"]),
+            ("VERIFIED", "CLEAR", []),
+        )
 
     def test_failure_modes(self):
         run = self.start(
@@ -526,7 +624,20 @@ class FactoryTests(unittest.TestCase):
         steps = " ".join(paired["next_steps"])
         for command in ("codex login", "claude auth login", "factory doctor --profile local"):
             self.assertIn(command, steps)
-        self.assertEqual(doctor("local", 0)["status"], "AVAILABLE")
+        broken_host = subprocess.run(
+            [sys.executable, str(CLI), "doctor"],
+            env={**self.env, "PATH": str(bin_dir), "FACTORY_HOST": "gemini"},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(broken_host.returncode, 0, broken_host.stderr)
+        self.assertIn("FACTORY_HOST", json.loads(broken_host.stdout)["roles_error"])
+        local = doctor("local", 0)
+        self.assertEqual(local["status"], "AVAILABLE")
+        self.assertEqual(
+            {row["status"] for row in local["roles"].values()}, {"UNFILLED"}
+        )
+        self.assertIsNone(local["host"]["harness"])
 
     def test_install_and_foreign_file_preservation(self):
         prefix = self.home / "user"

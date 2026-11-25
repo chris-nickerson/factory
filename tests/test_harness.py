@@ -27,7 +27,7 @@ def option(key): return args[args.index(key)+1]
 text=sys.stdin.read()
 root=pathlib.Path(os.environ['HARNESS_FIXTURE'])
 case=os.environ.get('HARNESS_CASE')
-item={'argv': args, 'prompt': text, 'cwd': os.getcwd()}
+item={'argv': args, 'prompt': text, 'cwd': os.getcwd(), 'tmpdir': os.environ.get('TMPDIR')}
 if '--append-system-prompt-file' in args:
     item['context']=pathlib.Path(option('--append-system-prompt-file')).read_text()
 (root/'observed.json').write_text(json.dumps(item))
@@ -51,12 +51,15 @@ if pathlib.Path(sys.argv[0]).name=='claude':
     if case=='swapped': response['session_id']=str(uuid.uuid4())
     if case=='empty': response['result']=''
     if case=='model': response['modelUsage']={'claude-sonnet-fixture':{}}
+    if case=='helper': response['modelUsage']={'claude-opus-fixture':{}, 'claude-haiku-fixture':{}}
     print(json.dumps(response))
 else:
     sid=option('resume') if 'resume' in args else str(uuid.uuid4())
     print(json.dumps({'type':'thread.started','thread_id':sid}))
     print(json.dumps({'type':'item.completed','item':{'type':'agent_message','text':text}}))
-    if case!='partial': print(json.dumps({'type':'turn.completed'}))
+    if case=='rejected':
+        print(json.dumps({'type':'turn.failed','error':{'message':'The model is not supported'}}))
+    elif case!='partial': print(json.dumps({'type':'turn.completed'}))
 sys.exit(9 if case=='exit' else 0)
 """
 
@@ -84,6 +87,8 @@ class HarnessTests(unittest.TestCase):
         self.addCleanup(environ.stop)
 
     def turn(self, provider="claude", prompt="hello", **kwargs):
+        if provider == "claude":
+            kwargs.setdefault("model", "opus")
         directory = self.root / str(uuid.uuid4())
         self.output = directory
         return run_turn(
@@ -158,6 +163,84 @@ class HarnessTests(unittest.TestCase):
                 receipt = self.receipt()
                 self.assertEqual(receipt["status"], "failed")
                 self.assertNotIn("text", receipt)
+
+    def test_receipt_says_how_far_model_identity_was_established(self):
+        self.assertEqual(self.turn()["model_identity"], "matched")
+        self.assertEqual(self.turn(model="opus[1m]")["model_identity"], "matched")
+        from harness import model_identity
+
+        bracketed = {"model_requested": "claude-opus-4[1m]"}
+        self.assertEqual(
+            model_identity(bracketed, {"model_usage": ["claude-opus-4[1m]"]}), "matched"
+        )
+        pinned = self.turn(model="claude-opus-fixture-20260101")
+        self.assertEqual(pinned["model_identity"], "indeterminate")
+        self.assertEqual(self.turn(selector="standard")["model_selector"], "standard")
+        unrequested = self.turn(model=None)
+        self.assertEqual(unrequested["model_identity"], "unrequested")
+        self.assertEqual(unrequested["model_reported"], "claude-opus-fixture")
+        self.assertNotIn("--model", self.observed()["argv"])
+        with (
+            patch.dict(os.environ, {"HARNESS_CASE": "model"}),
+            self.assertRaisesRegex(HarnessError, "not the requested"),
+        ):
+            self.turn(model="claude-sonnet-fixtur")
+        self.assertEqual(self.receipt()["model_reported"], "claude-sonnet-fixture")
+        with patch.dict(os.environ, {"HARNESS_CASE": "helper"}):
+            self.assertEqual(self.turn()["model_identity"], "indeterminate")
+        silent = self.turn("codex", model="gpt-fixture")
+        self.assertEqual(
+            (silent["model_identity"], silent["model_reported"]), ("unreported", None)
+        )
+        with (
+            patch.dict(os.environ, {"HARNESS_CASE": "rejected"}),
+            self.assertRaisesRegex(HarnessError, "The model is not supported"),
+        ):
+            self.turn("codex", model="retired")
+
+    def test_codex_edits_inside_the_worktree_and_a_private_scratch(self):
+        first = self.turn("codex", edit=True, local_shell=True)
+        observed = self.observed()
+        argv = observed["argv"]
+        self.assertEqual(argv[argv.index("--sandbox") + 1], "workspace-write")
+        for setting in (
+            "sandbox_workspace_write.network_access=false",
+            "sandbox_workspace_write.exclude_slash_tmp=true",
+            "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+        ):
+            self.assertIn(setting, argv)
+        scratch = Path(observed["tmpdir"])
+        self.assertEqual(scratch, self.output.resolve() / "tmp")
+        self.assertIn(
+            "sandbox_workspace_write.writable_roots=" + json.dumps([str(scratch)]), argv
+        )
+        self.assertFalse(scratch.is_relative_to(self.repo))
+        self.turn("codex", session_id=first["session_id"])
+        argv = self.observed()["argv"]
+        self.assertEqual(argv[argv.index("--sandbox") + 1], "read-only")
+        self.assertFalse(any("workspace_write" in arg for arg in argv))
+
+    def test_codex_reads_instructions_too_long_for_an_argument_from_their_file(self):
+        self.turn("codex", context="short instructions")
+        self.assertIn("short instructions", " ".join(self.observed()["argv"]))
+        for long_context in ("branch delta line\n" * 20_000, "\x01" * 30_000):
+            self.turn("codex", context=long_context)
+            argv = self.observed()["argv"]
+            self.assertLess(max(len(arg.encode()) for arg in argv), 60_000)
+            instructions = next(arg for arg in argv if "developer_instructions" in arg)
+            self.assertIn(str(self.output.resolve() / "context.txt"), instructions)
+            self.assertEqual((self.output / "context.txt").read_text(), long_context)
+
+    def test_turn_needs_a_harness_that_declares_it(self):
+        for kwargs, missing in (
+            (dict(edit=True), "file_only_edit"),
+            (dict(local_shell=True), "editing turn"),
+        ):
+            with self.subTest(kwargs), self.assertRaisesRegex(HarnessError, missing):
+                self.turn("codex", **kwargs)
+        with self.assertRaisesRegex(HarnessError, "Unknown harness"):
+            self.turn("gemini")
+        self.assertFalse(self.output.exists())
 
     def test_quiet_agent_finishes_without_a_deadline(self):
         with patch.dict(os.environ, {"HARNESS_CASE": "slow-success"}):

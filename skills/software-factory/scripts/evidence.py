@@ -9,6 +9,9 @@ import sys
 import time
 import uuid
 
+from harness import ADAPTERS, run_turn
+import roles
+from rounds import last_writer
 from supervision import captured_check as run_command
 from workspace import (
     ensure_visible_index,
@@ -238,6 +241,7 @@ def summary(folder, data, subject):
         status=result,
         claims=rows,
         review=review_status,
+        review_reductions=(review or {}).get("reviewer", {}).get("reductions", []),
         review_receipt=review,
         artifacts=str(folder),
     ), code
@@ -307,9 +311,31 @@ def outcome(args):
         return dict(run=args.run, outcome=entry), 0
 
 
-def review(args):
-    from harness import run_turn
+EMBEDDED_DIFF_MAX_CHARS = 600_000
+HARNESS_IMPLIED_BY_MODEL_FLAG = "codex"
 
+
+def review_writer(repo, policy):
+    """Describe who last changed the subject, so the reviewer can differ."""
+    simplified = last_writer(repo)
+    if simplified:
+        harness, run = simplified
+        return {
+            "vendor": ADAPTERS[harness].vendor,
+            "description": f"the simplifier that last changed this branch ({harness})",
+            "evidence": f"simplification run {run}",
+        }
+    host = policy.host["harness"]
+    if host:
+        return {
+            "vendor": ADAPTERS[host].vendor,
+            "description": f"the hosting session ({host}), which probably wrote the change",
+            "evidence": f"host detected from {policy.host['evidence']}",
+        }
+    return None
+
+
+def review(args):
     if args.timeout is not None:
         print(
             "Factory ignores the legacy review time limit. Agent turns run until completion or cancellation.",
@@ -329,21 +355,21 @@ def review(args):
         base = data["base"]
         paths = data.get("paths", [])
 
-        def diff_stat(*revisions):
+        def diff(form, *revisions):
             return git(
                 repo,
                 "--literal-pathspecs",
                 "diff",
                 "--no-ext-diff",
                 "--no-textconv",
-                "--stat",
+                form,
                 *revisions,
                 "--",
                 *paths,
             ).stdout.decode(errors="replace")
 
-        staged = diff_stat("--cached", base)
-        unstaged = diff_stat()
+        staged = diff("--stat", "--cached", base)
+        unstaged = diff("--stat")
         new = git(
             repo,
             "--literal-pathspecs",
@@ -355,14 +381,55 @@ def review(args):
         ).stdout.decode(errors="replace")
         if not (staged.strip() or unstaged.strip() or new.strip()):
             raise ValueError("Empty change from review base")
+
+        spec = roles.at_tier(args.reviewer, args.tier)
+        if args.model:
+            harness, model = roles.parse_spec(spec or HARNESS_IMPLIED_BY_MODEL_FLAG)
+            if model:
+                raise ValueError("Give the reviewer's model once, in --reviewer.")
+            spec = f"{harness or ''}:{args.model}"
         receipt = dict(subject=subject, base=base, paths=paths, status="PENDING")
         data["reviews"].append(receipt)
         write_json(folder / "state.json", data)
+        try:
+            policy = roles.Policy(repo)
+            writer = review_writer(repo, policy)
+            binding = roles.reviewer(policy, explicit=spec, writer=writer)
+        except roles.RoleError as error:
+            receipt.update(status="BLOCKED", reason=str(error))
+            write_json(folder / "state.json", data)
+            return summary(folder, data, snapshot(repo))
+        receipt.update(reviewer=binding, writer=writer, host=policy.host)
+        reviewer_runs_git = (
+            "read_only_shell" in ADAPTERS[binding["harness"]].capabilities
+        )
+        if not reviewer_runs_git:
+            staged = diff("--patch", "--cached", base)
+            unstaged = diff("--patch")
+        if (
+            not reviewer_runs_git
+            and len(staged) + len(unstaged) > EMBEDDED_DIFF_MAX_CHARS
+        ):
+            receipt.update(
+                status="BLOCKED",
+                reason=f"The change is too large to hand to {binding['harness']}, "
+                "which has no shell to read it with. Narrow the review with "
+                "--path at start, or choose a reviewer that has a read-only shell.",
+            )
+            write_json(folder / "state.json", data)
+            return summary(folder, data, snapshot(repo))
+        inspect = (
+            "The complete diffs follow: base to index, then index to worktree, "
+            "including staged hunks reversed by unstaged edits. You have no shell. "
+            "Read the listed untracked files and the surrounding source with your file tools. "
+            if not reviewer_runs_git
+            else "Inspect both git diff --cached BASE (base to index) and git diff (index to worktree), "
+            "including staged hunks reversed by unstaged edits. "
+        )
         prompt = (
             "Perform a fresh read-only correctness and requirements review. Inspect the full git diff against "
             f"{base} scoped to {json.dumps(paths) if paths else 'the full checkout'} plus the listed untracked files. Read surrounding callers and applicable instructions. "
-            "Inspect both git diff --cached BASE (base to index) and git diff (index to worktree), "
-            "including staged hunks reversed by unstaged edits. The runtime checks exercise the working tree. "
+            f"{inspect}The runtime checks exercise the working tree. "
             "For changed tests, identify the observable failure each adds or the guarantee a deletion "
             "would lose. Flag redundant coverage or fragile assertions with a concrete example. "
             "If a change affects what a required check enforces, verify it still rejects a known "
@@ -378,10 +445,11 @@ def review(args):
         output = folder / f"review-{uuid.uuid4().hex}"
         try:
             result = run_turn(
-                "codex",
+                binding["harness"],
                 repo=repo,
                 prompt=prompt,
-                model=args.model,
+                model=binding["model"],
+                selector=binding["selector"],
                 output_dir=output,
             )
             report = folder / f"{output.name}.md"
@@ -397,6 +465,8 @@ def review(args):
                 report=report.name,
                 sha256=file_digest(report),
                 session_id=result["session_id"],
+                model_reported=result.get("model_reported"),
+                model_identity=result.get("model_identity"),
             )
         except RuntimeError as exc:
             receipt.update(status="BLOCKED", reason=str(exc))
@@ -441,7 +511,7 @@ def register(sub):
         (
             "review",
             review,
-            "Run an independent read-only GPT review of the frozen scope",
+            "Run an independent read-only review of the frozen scope",
         ),
     ):
         parser = sub.add_parser(name, help=help_text)
@@ -456,5 +526,14 @@ def register(sub):
             )
         if name == "review":
             parser.add_argument("--timeout", type=int, help=argparse.SUPPRESS)
-            parser.add_argument("--model")
+            roles.add_tier_option(parser)
+            parser.add_argument(
+                "--reviewer",
+                metavar="SPEC",
+                help="HARNESS[:MODEL] or :MODEL for this review, such as claude or :standard",
+            )
+            parser.add_argument(
+                "--model",
+                help="reviewer model; without --reviewer, a Codex model as before",
+            )
         parser.set_defaults(action=handler)

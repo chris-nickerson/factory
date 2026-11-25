@@ -1,4 +1,8 @@
-"""Exercise the actual GPT/Opus pairing using a disposable local Git remote."""
+"""Exercise live consensus, simplification and review using a disposable local Git remote.
+
+With no role options this qualifies the default pairing on a machine with both
+harnesses. Pass role specs to qualify another assignment.
+"""
 
 import argparse
 import json
@@ -13,8 +17,8 @@ FACTORY = str(Path(__file__).resolve().parents[1] / "factory")
 REQUIREMENT = "Preserve price and total for integer cents and finite iterables of integer cents. Keep the existing rounding rule, iteration order, and ValueError message for negative input."
 
 
-def check_auto_shell(out):
-    """Measure the interpreter environment inside a real Opus Bash child."""
+def check_auto_shell(out, model):
+    """Measure the interpreter environment inside a real Claude Code Bash child."""
     sys.path.insert(0, str(Path(FACTORY).resolve().parent))
     from harness import run_turn
 
@@ -31,7 +35,7 @@ def check_auto_shell(out):
     control = os.urandom(8).hex()
     with patch.dict(os.environ, PYTHONDONTWRITEBYTECODE="0", FACTORY_PROBE_CONTROL=control):
         run_turn(
-            "claude", model="opus", repo=repo, edit=True, local_shell=True,
+            "claude", model=model, repo=repo, edit=True, local_shell=True,
             output_dir=out / "shell-probe-call",
             prompt="Use Bash to run exactly python3 check.py once in this directory. "
                    "Leave files and environment settings as supplied. Report the result.",
@@ -48,12 +52,19 @@ def main():
         type=Path,
         help="New directory for a disposable checkout, remote and receipts",
     )
+    role_flags = ("reviewer", "simplifier", "a", "b")
+    for role in role_flags:
+        parser.add_argument(f"--{role}", metavar="SPEC", help=f"role spec for {role}")
     args = parser.parse_args()
-    if subprocess.run([FACTORY, "doctor", "--profile", "paired"]).returncode:
+    chosen = {
+        role: [f"--{role}", spec]
+        for role in role_flags
+        if (spec := getattr(args, role))
+    }
+    if not chosen and subprocess.run([FACTORY, "doctor", "--profile", "paired"]).returncode:
         return 2
     out = args.output.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=False, mode=0o700)
-    check_auto_shell(out)
     repo = out / "checkout"
     repo.mkdir()
     env = {**os.environ, "FACTORY_STATE_DIR": str(out / "state")}
@@ -122,6 +133,8 @@ def main():
         "design",
         "consensus",
         "design",
+        *chosen.get("a", []),
+        *chosen.get("b", []),
         "--task",
         REQUIREMENT + " Choose the simplest maintainable shared calculation.",
     )
@@ -129,6 +142,8 @@ def main():
         "diagnosis",
         "consensus",
         "diagnosis",
+        *chosen.get("a", []),
+        *chosen.get("b", []),
         "--task",
         "A customer reports a sporadic slow checkout. No request, timing, workload or trace is available. Determine what cause the evidence supports.",
     )
@@ -139,6 +154,7 @@ def main():
     result = factory(
         "rounds",
         "simplify",
+        *chosen.get("simplifier", []),
         "--base",
         base,
         "--task",
@@ -148,6 +164,8 @@ def main():
         "--push",
         "fixture",
     )
+    if result["simplifier"]["harness"] == "claude":
+        check_auto_shell(out, result["simplifier"]["model"])
     rounds = result["rounds"]
     head = git("rev-parse", "HEAD")
     if (
@@ -158,7 +176,7 @@ def main():
     ):
         raise RuntimeError("Missing distinct sessions or remote checkpoints")
     factory("checks", "check", run, allowed=(2,))
-    gate = factory("gate", "review", run)
+    gate = factory("gate", "review", run, *chosen.get("reviewer", []))
     if gate["status"] != "VERIFIED" or gate["review"] != "CLEAR":
         raise RuntimeError("Final behavior or review gate is incomplete")
     if first == head:
@@ -168,7 +186,9 @@ def main():
         )
         return 2
     print(
-        f"Verified live pairing, three checkpoints and reviewed consumer behavior at {head}. Evidence in {out}"
+        f"Verified live roles, three checkpoints and reviewed consumer behavior at {head}. "
+        f"Reviewer: {gate['review_receipt']['reviewer']['harness']}. "
+        f"Simplifier: {result['simplifier']['harness']}. Evidence in {out}"
     )
     return 0
 

@@ -1,9 +1,15 @@
-"""Bounded, resumable turns through the local Codex and Claude Code CLIs."""
+"""Bounded, resumable turns through local agent CLIs, one adapter per harness.
 
+An adapter declares what its harness can do and builds the restricted command
+for each kind of turn. To support another harness, add an adapter here.
+"""
+
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 import uuid
@@ -16,10 +22,41 @@ class HarnessError(RuntimeError):
     """The provider could not produce a trustworthy, complete turn."""
 
 
-def _command(run, directory):
-    provider, session = run["provider"], run["requested_session"]
-    model = run["model_requested"]
-    if provider == "claude":
+class CatalogUnavailable(HarnessError):
+    """The harness could not list its models, so a family cannot be resolved."""
+
+
+# Linux refuses a single argument longer than 128 KiB.
+ARGUMENT_MAX_BYTES = 60_000
+
+
+class Claude:
+    name = "claude"
+    vendor = "anthropic"
+    title = "Claude Code CLI"
+    login = "claude auth login"
+    capabilities = frozenset(
+        {"read_only", "edit", "file_only_edit", "sandboxed_shell", "resume", "reports_model"}
+    )
+    host_env = ("CLAUDECODE",)
+    host_processes = ("claude",)
+    caller_names_session = True
+
+    @staticmethod
+    def authenticated(probe, exe):
+        _, raw = probe([exe, "auth", "status"])
+        try:
+            return json.loads(raw)["loggedIn"] is True
+        except (ValueError, KeyError, TypeError):
+            return False
+
+    @staticmethod
+    def resolve_model(selector, probe=None):
+        """Claude Code accepts a family alias or a full model name as given."""
+        return selector
+
+    @staticmethod
+    def command(run, directory):
         tools = "Read,Glob,Grep" + (",Edit,Write" if run["edit"] else "")
         shell = run.get("local_shell", False)
         argv = [
@@ -36,11 +73,12 @@ def _command(run, directory):
             "auto" if shell else "dontAsk",
             "--output-format",
             "json",
-            "--model",
-            model,
-            "--resume" if run["resume"] else "--session-id",
-            session,
         ]
+        if run["model_requested"]:
+            argv.extend(["--model", run["model_requested"]])
+        argv.extend(
+            ["--resume" if run["resume"] else "--session-id", run["requested_session"]]
+        )
         if shell:
             # Let Auto classify commands. Preapproving Bash would skip that decision.
             settings = {
@@ -66,91 +104,257 @@ def _command(run, directory):
                     "off" if run["resume"] else "on",
                 ]
             )
-        return argv
+        return argv, None
 
-    argv = [
-        "codex",
-        "--no-daemon",
-        "-a",
-        "never",
-        "exec",
-        "--ignore-user-config",
-        "--ignore-rules",
-        "--skip-git-repo-check",
-        "--sandbox",
-        "read-only",
-        "--json",
-        "--disable",
-        "apps",
-        "--disable",
-        "plugins",
-        "--disable",
-        "hooks",
-        "--disable",
-        "multi_agent",
-        "--disable",
-        "multi_agent_v2",
-        "-c",
-        "mcp_servers={}",
-    ]
-    if model:
-        argv.extend(["--model", model])
-    if run["has_context"]:
-        context = (directory / "context.txt").read_text(encoding="utf-8")
-        argv.extend(
-            ["-c", "developer_instructions=" + json.dumps(context, ensure_ascii=False)]
-        )
-    if session:
-        argv.extend(["resume", session])
-    return [*argv, "-"]
-
-
-def _codex_result(path):
-    session = text = None
-    complete = False
-    with path.open(encoding="utf-8") as stream:
-        for line in stream:
-            event = json.loads(line)
-            kind = event["type"]
-            if kind == "thread.started":
-                session = event["thread_id"]
-            elif kind == "item.completed" and event["item"]["type"] == "agent_message":
-                text = event["item"].get("text")
-            elif kind == "turn.completed":
-                complete = True
-            elif kind == "turn.failed":
-                raise HarnessError("Codex reported a failed turn")
-    if not complete:
-        raise HarnessError("Codex did not report a completed turn")
-    return {"session_id": session, "text": text, "model_reported": None}
-
-
-def _claude_result(path):
-    result = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(result, dict):
-        raise HarnessError("Claude returned an unexpected result format")
-    if result.get("is_error") or result.get("subtype") != "success":
-        message = str(result.get("result", "")).lower()
-        if (
-            "authenticate" in message
-            or "login" in message
-            or "not logged in" in message
-        ):
+    @staticmethod
+    def result(path):
+        result = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(result, dict):
+            raise HarnessError("Claude returned an unexpected result format")
+        if result.get("is_error") or result.get("subtype") != "success":
+            message = str(result.get("result", "")).lower()
+            if (
+                "authenticate" in message
+                or "login" in message
+                or "not logged in" in message
+            ):
+                raise HarnessError(
+                    "Claude authentication failed. Run claude auth login and retry."
+                )
+            raise HarnessError("Claude reported an unsuccessful turn")
+        if result.get("permission_denials"):
             raise HarnessError(
-                "Claude authentication failed. Run claude auth login and retry."
+                "Claude reported denied tools. Inspect the turn before continuing."
             )
-        raise HarnessError("Claude reported an unsuccessful turn")
-    if result.get("permission_denials"):
-        raise HarnessError(
-            "Claude reported denied tools. Inspect the turn before continuing."
+        models = list(result.get("modelUsage") or {})
+        return {
+            "session_id": result.get("session_id"),
+            "text": result.get("result"),
+            "model_reported": models[0] if len(models) == 1 else None,
+            "model_usage": models,
+        }
+
+
+class Codex:
+    name = "codex"
+    vendor = "openai"
+    title = "Codex CLI"
+    login = "codex login"
+    capabilities = frozenset(
+        {"read_only", "read_only_shell", "edit", "sandboxed_shell", "resume"}
+    )
+    host_env = ("CODEX_THREAD_ID", "CODEX_SHELL")
+    host_processes = ("codex",)
+    caller_names_session = False
+
+    @staticmethod
+    def authenticated(probe, exe):
+        return probe([exe, "login", "status"])[0] == 0
+
+    @staticmethod
+    def resolve_model(selector, probe):
+        """Resolve a family name to the catalog's preferred listed model.
+
+        Codex accepts only complete model names, and its catalog is the one
+        place that says which complete name currently carries a family. A
+        hyphenated selector is a complete name and needs no catalog.
+        """
+        if "-" in selector:
+            return selector
+        for argv in (["codex", "debug", "models"], ["codex", "debug", "models", "--bundled"]):
+            try:
+                catalog = json.loads(probe(argv)[1])["models"]
+                return _family_member(catalog, selector)
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+        raise CatalogUnavailable(
+            f"Codex did not provide a model catalog to resolve {selector!r}."
         )
-    models = list(result.get("modelUsage") or {})
-    return {
-        "session_id": result.get("session_id"),
-        "text": result.get("result"),
-        "model_reported": models[0] if len(models) == 1 else None,
-        "model_usage": models,
-    }
+
+    @staticmethod
+    def command(run, directory):
+        argv = [
+            "codex",
+            "--no-daemon",
+            "-a",
+            "never",
+            "exec",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--skip-git-repo-check",
+            "--sandbox",
+            "workspace-write" if run["edit"] else "read-only",
+            "--json",
+            "--disable",
+            "apps",
+            "--disable",
+            "plugins",
+            "--disable",
+            "hooks",
+            "--disable",
+            "multi_agent",
+            "--disable",
+            "multi_agent_v2",
+            "-c",
+            "mcp_servers={}",
+        ]
+        env = None
+        if run["edit"]:
+            # workspace-write also opens /tmp and TMPDIR by default. Confine
+            # temporary files to a directory that belongs to this turn.
+            scratch = directory / "tmp"
+            scratch.mkdir(mode=0o700, exist_ok=True)
+            for setting in (
+                "sandbox_workspace_write.network_access=false",
+                "sandbox_workspace_write.exclude_slash_tmp=true",
+                "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+                "sandbox_workspace_write.writable_roots=" + json.dumps([str(scratch)]),
+                'shell_environment_policy.inherit="all"',
+            ):
+                argv.extend(["-c", setting])
+            env = {
+                **os.environ,
+                "TMPDIR": str(scratch),
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
+        if run["model_requested"]:
+            argv.extend(["--model", run["model_requested"]])
+        if run["has_context"]:
+            context = (directory / "context.txt").read_text(encoding="utf-8")
+            instructions = "developer_instructions=" + json.dumps(
+                context, ensure_ascii=False
+            )
+            if len(instructions.encode()) > ARGUMENT_MAX_BYTES:
+                # Codex takes these instructions as one argument, and the OS
+                # limits an argument's size. Its sandbox can read the file.
+                instructions = "developer_instructions=" + json.dumps(
+                    "The coordinator's instructions for this turn are in the file "
+                    f"{directory / 'context.txt'}. They are too long to include here "
+                    "and carry the same authority as this message. Read the whole "
+                    "file before you do anything else."
+                )
+            argv.extend(["-c", instructions])
+        if run["requested_session"]:
+            argv.extend(["resume", run["requested_session"]])
+        return [*argv, "-"], env
+
+    @staticmethod
+    def result(path):
+        session = text = None
+        complete = False
+        with path.open(encoding="utf-8") as stream:
+            for line in stream:
+                event = json.loads(line)
+                kind = event["type"]
+                if kind == "thread.started":
+                    session = event["thread_id"]
+                elif (
+                    kind == "item.completed"
+                    and event["item"]["type"] == "agent_message"
+                ):
+                    text = event["item"].get("text")
+                elif kind == "turn.completed":
+                    complete = True
+                elif kind == "turn.failed":
+                    detail = str((event.get("error") or {}).get("message") or "")
+                    raise HarnessError(
+                        "Codex reported a failed turn"
+                        + (f": {detail[:300]}" if detail else "")
+                    )
+        if not complete:
+            raise HarnessError("Codex did not report a completed turn")
+        return {"session_id": session, "text": text, "model_reported": None}
+
+
+def _family_member(catalog, family):
+    """Return the current model for a family, or the model with that exact name."""
+    current = sorted(
+        (
+            model
+            for model in catalog
+            if model.get("visibility") == "list" and not _retired(model)
+        ),
+        key=lambda model: model["priority"],
+    )
+    in_family = [
+        model["slug"]
+        for model in current
+        if family.lower() in _name_parts(model["slug"])
+    ]
+    for candidates in (
+        [model["slug"] for model in current if model["slug"] == family],
+        in_family,
+        [model["slug"] for model in catalog if model["slug"] == family],
+    ):
+        if candidates:
+            return candidates[0]
+    raise HarnessError(
+        f"The Codex catalog lists no model in the {family!r} family. "
+        "Run `codex debug models` to see the current names."
+    )
+
+
+def _retired(model):
+    when = (model.get("upgrade") or {}).get("retirement_at")
+    try:
+        moment = datetime.fromisoformat(when)
+    except (TypeError, ValueError):
+        return False
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment <= datetime.now(timezone.utc)
+
+
+ADAPTERS = {adapter.name: adapter for adapter in (Codex, Claude)}
+
+
+def turn_capabilities(edit, local_shell):
+    """Name what one turn needs from the harness that runs it."""
+    if not edit:
+        return {"read_only"}
+    return {"edit", "sandboxed_shell"} if local_shell else {"edit", "file_only_edit"}
+
+
+def _name_parts(model):
+    """Split a model name into parts, leaving out a bracketed option."""
+    return re.split(r"[-.]", model.split("[")[0].lower())
+
+
+def _within(parts, name):
+    """Say whether `parts` appear in `name` as whole, consecutive parts.
+
+    A family names part of the reported model, and a dated name extends it.
+    Whole parts keep one version from matching another that starts the same.
+    """
+    return any(
+        name[start : start + len(parts)] == parts
+        for start in range(len(name) - len(parts) + 1)
+    )
+
+
+def model_identity(record, result):
+    """Say how far the reported model confirms the requested one.
+
+    `matched` means one reported model carries the request. `indeterminate`
+    means the report cannot settle it: several models were reported, or the
+    request pins a revision the report leaves out. A report that excludes the
+    request raises.
+    """
+    requested = record["model_requested"]
+    reported = result.get("model_usage", [])
+    if not reported:
+        return "unreported"
+    if not requested:
+        return "unrequested"
+    wanted = _name_parts(requested)
+    names = [_name_parts(name) for name in reported]
+    if any(_within(wanted, name) for name in names):
+        return "matched" if len(reported) == 1 else "indeterminate"
+    if any(_within(name, wanted) for name in names):
+        return "indeterminate"
+    raise HarnessError(
+        f"The harness reports {', '.join(reported)}, not the requested {requested}"
+    )
 
 
 def _supervise(directory):
@@ -166,7 +370,8 @@ def _supervise(directory):
         _save(receipt, record)
 
     try:
-        argv = _command(record, directory)
+        adapter = ADAPTERS[record["provider"]]
+        argv, env = adapter.command(record, directory)
         stdout = directory / "stdout"
         with (
             (directory / "prompt.txt").open("rb") as prompt,
@@ -181,14 +386,11 @@ def _supervise(directory):
                 stderr=err,
                 timeout=None,
                 on_start=started_group,
+                env=env,
             )
             record["returncode"] = rc
         try:
-            result = (
-                _claude_result(stdout)
-                if record["provider"] == "claude"
-                else _codex_result(stdout)
-            )
+            result = adapter.result(stdout)
         except (ValueError, KeyError, TypeError) as error:
             raise HarnessError(f"Invalid provider response (exit {rc})") from error
         if rc:
@@ -201,12 +403,13 @@ def _supervise(directory):
             and result["session_id"] != record["requested_session"]
         ):
             raise HarnessError("Provider returned a different session ID")
-        if record["model_requested"] == "opus" and result.get("model_usage"):
-            if not any("opus" in name.lower() for name in result["model_usage"]):
-                raise HarnessError(
-                    "Claude usage reports a different model family than Opus"
-                )
-        record.update(result, status="success")
+        record.update(
+            model_reported=result["model_reported"],
+            model_usage=result.get("model_usage", []),
+        )
+        record.update(
+            result, model_identity=model_identity(record, result), status="success"
+        )
     except (
         HarnessError,
         ProcessError,
@@ -228,6 +431,7 @@ def run_turn(
     prompt,
     context="",
     model=None,
+    selector=None,
     session_id=None,
     edit=False,
     local_shell=False,
@@ -235,22 +439,33 @@ def run_turn(
 ):
     """Start or resume the specified session and return its saved receipt.
 
-    The caller coordinates writes to the workspace. Claude's restricted profile
-    exposes worktree file tools and can enable sandboxed Bash for Auto edits.
-    Codex accepts read-only tasks through this adapter. Use a new output directory
-    outside the target workspace for each attempt. Successful Codex receipts
-    record `model_reported` as null.
+    The caller coordinates writes to the workspace. A read-only turn cannot
+    change it. An editing turn can change worktree files and, with
+    `local_shell`, run sandboxed commands that cannot write Git metadata. Use
+    a new output directory outside the target workspace for each attempt. With
+    `model=None` the harness chooses its own model.
+    `selector` records the tier or family the caller resolved `model` from. The
+    receipt's `model_identity` says whether the reported model matched the
+    request. A harness that reports no model leaves `model_reported` null.
     """
-    if provider not in ("codex", "claude") or (edit and provider != "claude"):
-        raise HarnessError("Unsupported provider or edit mode")
+    adapter = ADAPTERS.get(provider)
+    if adapter is None:
+        raise HarnessError(f"Unknown harness {provider!r}")
+    missing = turn_capabilities(edit, local_shell) - adapter.capabilities
+    if session_id and "resume" not in adapter.capabilities:
+        missing.add("resume")
+    if missing:
+        raise HarnessError(
+            f"{adapter.title} cannot provide {', '.join(sorted(missing))} for this turn"
+        )
     if (
         not isinstance(prompt, str)
         or not prompt.strip()
         or not isinstance(context, str)
     ):
         raise HarnessError("Expected a nonempty user prompt and text context")
-    if local_shell and (provider != "claude" or not edit):
-        raise HarnessError("Local shell requires an Opus editing turn")
+    if local_shell and not edit:
+        raise HarnessError("Local shell requires an editing turn")
     if session_id:
         try:
             uuid.UUID(session_id)
@@ -274,15 +489,15 @@ def run_turn(
     if context:
         (directory / "context.txt").write_bytes(context_bytes)
     requested_session = session_id
-    if provider == "claude":
+    if adapter.caller_names_session:
         requested_session = session_id or str(uuid.uuid4())
-        model = model or "opus"
     record = {
         "status": "starting",
         "coordinator_pid": os.getpid(),
         "repo": str(repo),
         "provider": provider,
         "model_requested": model,
+        "model_selector": selector,
         "requested_session": requested_session,
         "resume": bool(session_id),
         "prompt_sha256": hashlib.sha256(payload).hexdigest(),

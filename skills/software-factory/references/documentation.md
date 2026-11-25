@@ -30,7 +30,10 @@ For pull request descriptions, start from the [PR writing guide](pr-descriptions
 | Subject | The workspace fingerprint associated with the result. In a Git checkout, it includes HEAD, the index, tracked working files and unignored new files. |
 | Stale result | A result for a different subject. Use `factory check RUN_ID` for a stale check or `factory review RUN_ID` for a stale review. |
 | Checkpoint | The checked Git commit for a simplification round. A round with no edits can use the existing commit. |
-| Receipt | A saved record of an operation, such as a provider call, check, review or publication. |
+| Receipt | A saved record of an operation, such as a model turn, check, review or publication. |
+| Role | A job Factory gives to a separate model session: `reviewer`, `simplifier`, `consensus-a` or `consensus-b`. |
+| Harness | The agent CLI that runs a model session, such as Codex or Claude Code. The host is the harness running the session that called Factory. |
+| Reduced assurance | A statement that a result is worth less than the default, such as a review by the same vendor as the author. |
 
 Keep working files, the Git index and a committed tree distinct. A change can be present in one even when it is absent from another.
 

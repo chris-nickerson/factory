@@ -14,6 +14,8 @@ from unittest.mock import patch
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "skills/software-factory/scripts")
 )
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fake_machine import use_machine
 import dialogue
 import harness
 from harness import HarnessError
@@ -34,9 +36,16 @@ class DialogueTests(unittest.TestCase):
         self.repo = self.root / "checkout"
         self.repo.mkdir()
         self.data = self.root / "state"
-        env = patch.dict(os.environ, {"FACTORY_STATE_DIR": str(self.data)})
+        env = patch.dict(
+            os.environ,
+            {
+                "FACTORY_STATE_DIR": str(self.data),
+                "XDG_CONFIG_HOME": str(self.root / "config"),
+            },
+        )
         env.start()
         self.addCleanup(env.stop)
+        use_machine(self, "codex", "claude")
         self.calls, self.script = [], []
         adapter = patch.object(dialogue, "run_turn", side_effect=self.turn)
         adapter.start()
@@ -56,13 +65,17 @@ class DialogueTests(unittest.TestCase):
             "status": "success",
             "provider": provider,
             "text": answer,
-            "session_id": call["session_id"] or f"initial-{provider}",
+            "session_id": call["session_id"] or self.new_session(provider),
             "prompt_sha256": dialogue._digest(call["prompt"]),
             "context_sha256": dialogue._digest(call["context"]),
             "repo": str(call["repo"]),
         }
         (folder / "receipt.json").write_text(json.dumps(record))
         return record
+
+    def new_session(self, provider):
+        opened = sum(p == provider and c["session_id"] is None for p, c in self.calls)
+        return f"initial-{provider}" + (f"-{opened}" if opened > 1 else "")
 
     def invoke(self, *argv):
         args = self.parser.parse_args(["consensus", *argv])
@@ -109,6 +122,70 @@ class DialogueTests(unittest.TestCase):
         self.assertEqual(
             PROPOSE_A + "\n", (Path(out["artifacts"]) / "turn_001_a.md").read_text()
         )
+
+    def test_participants_follow_flags_and_one_harness_is_reported(self):
+        self.script = [OPEN, OPEN, PROPOSE_B, ACCEPT_B]
+        code, out = self.start("--a", "claude:frontier", "--b", "codex")
+        self.assertEqual(0, code)
+        self.assertEqual(
+            ["claude", "codex", "codex", "claude"], [p for p, _ in self.calls]
+        )
+        self.assertEqual(
+            ["fable", "gpt-9.2-sol"], [c["model"] for _, c in self.calls[:2]]
+        )
+        self.assertEqual(out["reductions"], [])
+        self.calls.clear()
+        self.script = [OPEN, OPEN, PROPOSE_B, ACCEPT_B]
+        self.start("--tier", "frontier")
+        self.assertEqual(
+            [("codex", "gpt-9.2-astra"), ("claude", "fable")],
+            [(p, c["model"]) for p, c in self.calls[:2]],
+        )
+        self.calls.clear()
+        self.script = [OPEN, OPEN, PROPOSE_B, ACCEPT_B]
+        code, out = self.start("--a", "claude", "--b", "claude")
+        self.assertEqual(0, code)
+        self.assertEqual({"claude"}, {p for p, _ in self.calls})
+        self.assertEqual(
+            [None, None, "initial-claude-2", "initial-claude"],
+            [c["session_id"] for _, c in self.calls],
+        )
+        self.assertIn("Same-model consensus", out["reductions"][0])
+        self.assertEqual(out, self.invoke("status", out["run"])[1])
+
+    def test_run_saved_before_participants_resumes_with_its_original_pair(self):
+        self.script = [OPEN, HarnessError("offline")]
+        code, out = self.start("--gpt-model", "gpt-9.1-astra", "--opus-model", "opus")
+        self.assertEqual((2, "blocked"), (code, out["status"]))
+        path = Path(out["artifacts"]) / "run.json"
+        meta = json.loads(path.read_text())
+        meta["models"] = {
+            slot: binding["model"] for slot, binding in meta.pop("participants").items()
+        }
+        self.assertEqual(meta["models"], {"a": "gpt-9.1-astra", "b": "opus"})
+        meta["version"] = 2
+        path.write_text(json.dumps(meta))
+        use_machine(self)
+        self.script = [OPEN, PROPOSE_B, ACCEPT_B]
+        code, resumed = self.invoke("resume", out["run"])
+        self.assertEqual((0, "confirmed"), (code, resumed["status"]))
+        self.assertNotIn("participants", resumed)
+        self.assertEqual(
+            [("codex", "gpt-9.1-astra"), ("claude", "opus"), ("claude", "opus"), ("claude", "opus"), ("codex", "gpt-9.1-astra")],
+            [(p, c["model"]) for p, c in self.calls],
+        )
+
+    def test_resume_refuses_an_old_receipt_whose_reported_model_differs(self):
+        self.script = [OPEN, OPEN, HarnessError("offline")]
+        code, out = self.start("--b", "claude:sonnet")
+        self.assertEqual((2, "blocked"), (code, out["status"]))
+        receipt = Path(out["artifacts"]) / "opening-b/attempt-0001/call/receipt.json"
+        saved = json.loads(receipt.read_text())
+        saved.update(model_requested="sonnet", model_usage=["claude-opus-fixture"])
+        receipt.write_text(json.dumps(saved))
+        code, resumed = self.invoke("resume", out["run"])
+        self.assertEqual((2, "blocked"), (code, resumed["status"]))
+        self.assertIn("not the requested sonnet", resumed["reason"])
 
     def test_wrong_ref_and_quoted_status_not_confirmation(self):
         self.script = [
@@ -229,6 +306,9 @@ class DialogueTests(unittest.TestCase):
         self.assertNotIn("expires", meta)
         self.assertNotIn("timeout", meta)
         meta.update(version=1, expires=1, timeout=150)
+        meta["models"] = {
+            slot: binding["model"] for slot, binding in meta.pop("participants").items()
+        }
         path.write_text(json.dumps(meta))
         self.script = [OPEN, PROPOSE_B, ACCEPT_B]
         code, resumed = self.invoke("resume", out["run"])
