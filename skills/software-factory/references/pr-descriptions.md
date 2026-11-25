@@ -10,10 +10,17 @@ Read the request, the final diff against the intended base, the check results an
 
 **Show how you know.** Give the most relevant observation and link to the evidence when available. Describe the result in product terms (“the exporter wrote five rows”). A test can pass, fail or check that result. Attribute supplied results to the test run. Say “I ran” only for checks you personally performed. Group checks that support the same claim. Say which material cases remain untested.
 
-For example:
+**Show the same case before and after.** If one sentence explains the cause, use it. When the reader would have to sketch what happened, choose the smallest illustration that explains the result. Hold the input and conditions fixed, use the same labels and units, and end with what a user or caller observes. Use aligned timelines for a deadline, a table for a decision, a short trace for a handoff, or sample input and output for an API contract.
+
+In this fictional PR, the author ran the same export on both revisions:
 
 > Large order exports stopped after the first page, so some orders were missing from the CSV. The exporter now requests each remaining page before it closes the file.
 >
-> A regression test exported five orders across three pages. The CSV contained all five orders and one header row.
+> The test served pages of two, two and one order. It recorded each page request and compared the order IDs in the CSV with the five input IDs, including duplicates in the comparison. The fixed export also had one header row.
+>
+> | Five orders on three pages | Page requests | Orders in the CSV |
+> |---|---|---|
+> | Before | 1 | 2 of 5 |
+> | After | 3 | 5 of 5 |
 
 Read the draft with the ticket closed. Can a reviewer explain the change, the reason and the evidence? Check factual claims against the final diff and evidence, especially claims about what always happens or cannot happen. Cut repeated facts, file inventories and the agent’s work diary. For a body-only request, return the Markdown exactly as it should appear on the PR, without a chat introduction, an enclosing code fence or a closing note.
