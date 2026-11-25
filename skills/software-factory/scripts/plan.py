@@ -50,7 +50,10 @@ def read_plan(path):
             run = entry["run"]
             if not isinstance(run, str):
                 raise ValueError(f"{key}: expected a Factory run ID")
-            evidence.run_path(run)
+            try:
+                evidence.run_path(run)
+            except ValueError as error:
+                raise ValueError(f"{key}: {error}") from error
             if run in runs:
                 raise ValueError(f"{key}: run already assigned to another item")
             runs.add(run)
@@ -73,15 +76,16 @@ def inspect_item(entry, inputs):
         )
     try:
         report, code = evidence.run_status(entry["run"])
-    except (
-        CalledProcessError,
-        ValueError,
-        OSError,
-        RuntimeError,
-        KeyError,
-        TypeError,
-    ) as error:
+    except CalledProcessError as error:
+        detail = (error.stderr or b"").decode(errors="replace").strip()
+        return dict(state="ATTENTION", reason=detail or str(error))
+    except (ValueError, OSError, RuntimeError, KeyError, TypeError) as error:
         return dict(state="ATTENTION", reason=str(error))
+    if not Path(report["repo"]).is_dir():
+        return dict(
+            state="ATTENTION",
+            reason=f"Workspace directory unavailable: {report['repo']}",
+        )
     if report["task"] != entry["task"]:
         return dict(state="ATTENTION", reason="The run task differs from the plan item")
     return dict(

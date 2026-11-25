@@ -182,8 +182,6 @@ def snapshot(repo, *, plain_directory=False, worktree_only=False):
     A worktree-only fingerprint omits Git metadata and hashes symlinks as links.
     """
     repo = Path(repo).resolve()
-    if not repo.is_dir():
-        raise ValueError(f"Workspace directory unavailable: {repo}")
     digest = hashlib.sha256()
 
     def field(value):
