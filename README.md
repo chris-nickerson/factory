@@ -2,7 +2,7 @@
 
 I want coding agents to understand a problem before they change code, make the smallest change that holds up, and give me enough evidence to decide what to do next. Sometimes that means shipping a small fix. Sometimes it means finding the missing evidence, simplifying a design, or leaving the code alone. I’m building Software Factory to grow into a way of working across the whole engineering task, from the first question through the pull request.
 
-Today, Factory is an installable agent skill and a local CLI. The skill reads your request, chooses a workflow, and carries your constraints through the work using the repository’s own instructions and tools. The CLI runs checks, saves their results against a fingerprint of the workspace, and coordinates separate model sessions when a workflow calls for them. The checks and saved records are only as trustworthy as the local account that runs them.
+Today, Factory is an installable agent skill and a local CLI. The skill reads your request, chooses a workflow, and carries your constraints through the work using the repository’s own instructions and tools. The CLI runs checks, saves what happened, and coordinates separate model sessions when a workflow calls for them.
 
 ## What you can ask for
 
@@ -57,7 +57,7 @@ If the default skill directory is still a symlink or its entry points to `releas
 
 Keep the installed skill path out of Git’s index. If the index tracks an older symlink at that path, remove the index entry before verifying changes in the checkout.
 
-Factory saves run records outside your project in `~/.local/state/software-factory` by default. Set `FACTORY_STATE_DIR` to change the location. Use the same state directory for every Factory command on a worktree so the commands share its lock and know which run owns it. Records can include source code and command output.
+Factory saves run records outside your project in `~/.local/state/software-factory` by default. Set `FACTORY_STATE_DIR` to change the location. Use the same state directory for every Factory command on a worktree so the commands share its lock and know which run owns it. Records can include source code and command output. The checks and saved records rely on the local account that runs them.
 
 </details>
 

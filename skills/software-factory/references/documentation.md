@@ -4,6 +4,8 @@ Write for a capable reader who missed the conversation. Lead with what the reade
 
 ## Write in plain technical English
 
+Write like you’re explaining the work to a teammate. In the README, use first person when you say why Factory exists or what you want it to become. In a procedure, speak to the person doing the work. Give a real request, command or result when it helps the reader see what you mean.
+
 - Name the actor, action and object. Put a condition before an action when the reader must check it first.
 - Use one main thought per sentence. Keep a condition or reason with the action when the reader needs both to make a decision.
 - Use the same term for the same thing. Explain Factory terms on first use. Match names the reader sees in code, commands and output.
