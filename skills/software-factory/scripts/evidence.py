@@ -251,7 +251,11 @@ def summary(folder, data, subject):
 
 
 def status(args):
-    folder = run_path(args.run)
+    return run_status(args.run)
+
+
+def run_status(run):
+    folder = run_path(run)
     repo = Path(load(folder)["repo"])
     with workspace_lock(repo):
         return summary(folder, load(folder), snapshot(repo))

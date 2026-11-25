@@ -1,6 +1,3 @@
-"""Inspect the dependencies and current evidence for a local engineering plan."""
-
-from argparse import Namespace
 from graphlib import CycleError, TopologicalSorter
 import json
 from pathlib import Path
@@ -16,7 +13,13 @@ def read_plan(path):
     items = {}
     runs = set()
     for entry in entries:
-        if not isinstance(entry, dict) or set(entry) - {"id", "task", "needs", "run", "inputs"}:
+        if not isinstance(entry, dict) or set(entry) - {
+            "id",
+            "task",
+            "needs",
+            "run",
+            "inputs",
+        }:
             raise ValueError("Expected id, task, optional needs, run and inputs")
         key = entry.get("id")
         if not isinstance(key, str) or not key.strip() or key in items:
@@ -25,14 +28,24 @@ def read_plan(path):
         if not isinstance(task, str) or not task.strip():
             raise ValueError(f"{key}: expected a nonempty task")
         needs = entry.get("needs", [])
-        if not isinstance(needs, list) or not all(isinstance(n, str) for n in needs) or len(set(needs)) != len(needs):
+        if (
+            not isinstance(needs, list)
+            or not all(isinstance(n, str) for n in needs)
+            or len(set(needs)) != len(needs)
+        ):
             raise ValueError(f"{key}: needs must be an array of distinct item IDs")
         if "inputs" in entry:
             inputs = entry["inputs"]
-            if not isinstance(inputs, dict) or not all(isinstance(v, str) for v in inputs.values()):
-                raise ValueError(f"{key}: expected input subjects keyed by prerequisite ID")
+            if not isinstance(inputs, dict) or not all(
+                isinstance(v, str) for v in inputs.values()
+            ):
+                raise ValueError(
+                    f"{key}: expected input subjects keyed by prerequisite ID"
+                )
             if "run" not in entry or inputs.keys() - set(needs):
-                raise ValueError(f"{key}: inputs must belong to a run and name its prerequisites")
+                raise ValueError(
+                    f"{key}: inputs must belong to a run and name its prerequisites"
+                )
         if "run" in entry:
             run = entry["run"]
             if not isinstance(run, str):
@@ -53,10 +66,21 @@ def inspect_item(entry, inputs):
     if "run" not in entry:
         return dict(state="READY")
     if entry.get("inputs", {}) != inputs:
-        return dict(state="ATTENTION", reason="Run inputs differ from current prerequisites", current_inputs=inputs)
+        return dict(
+            state="ATTENTION",
+            reason="Run inputs differ from current prerequisites",
+            current_inputs=inputs,
+        )
     try:
-        report, code = evidence.status(Namespace(run=entry["run"]))
-    except (CalledProcessError, ValueError, OSError, RuntimeError, KeyError, TypeError) as error:
+        report, code = evidence.run_status(entry["run"])
+    except (
+        CalledProcessError,
+        ValueError,
+        OSError,
+        RuntimeError,
+        KeyError,
+        TypeError,
+    ) as error:
         return dict(state="ATTENTION", reason=str(error))
     if report["task"] != entry["task"]:
         return dict(state="ATTENTION", reason="The run task differs from the plan item")
@@ -79,7 +103,9 @@ def plan(args):
     results = {}
     for key in order:
         entry = items[key]
-        waiting = [n for n in entry.get("needs", []) if results[n]["state"] != "VERIFIED"]
+        waiting = [
+            n for n in entry.get("needs", []) if results[n]["state"] != "VERIFIED"
+        ]
         if waiting:
             decision = dict(state="WAITING", waiting_for=waiting)
         else:
@@ -95,6 +121,8 @@ def plan(args):
 
 
 def register(sub):
-    parser = sub.add_parser("plan", help="Inspect dependencies and live evidence across Factory runs")
+    parser = sub.add_parser(
+        "plan", help="Inspect dependencies and live evidence across Factory runs"
+    )
     parser.add_argument("file", type=Path, help="JSON array of work items")
     parser.set_defaults(action=plan)

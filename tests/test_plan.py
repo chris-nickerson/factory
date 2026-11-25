@@ -18,14 +18,28 @@ class PlanTests(unittest.TestCase):
         self.root = Path(temporary.name).resolve()
         self.state = self.root / "state"
         self.contract = self.root / "contract.json"
-        self.contract.write_text(json.dumps([{
-            "id": "accepted", "expect": "acceptance marker contains yes",
-            "argv": [sys.executable, "-c", "assert open('accepted').read() == 'yes'"],
-        }]))
+        self.contract.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "accepted",
+                        "expect": "acceptance marker contains yes",
+                        "argv": [
+                            sys.executable,
+                            "-c",
+                            "assert open('accepted').read() == 'yes'",
+                        ],
+                    }
+                ]
+            )
+        )
 
     def cli(self, *args, code=0):
         result = subprocess.run(
-            [CLI, *args], cwd=self.root, text=True, capture_output=True,
+            [CLI, *args],
+            cwd=self.root,
+            text=True,
+            capture_output=True,
             env=dict(os.environ, FACTORY_STATE_DIR=str(self.state)),
         )
         self.assertEqual(result.returncode, code, (result.stdout, result.stderr))
@@ -35,7 +49,9 @@ class PlanTests(unittest.TestCase):
         repo = self.root / task
         repo.mkdir(exist_ok=True)
         (repo / "accepted").write_text("yes")
-        run = self.cli("start", "--repo", repo, "--task", task, "--contract", self.contract)["run"]
+        run = self.cli(
+            "start", "--repo", repo, "--task", task, "--contract", self.contract
+        )["run"]
         self.cli("check", run)
         return run
 
@@ -46,18 +62,31 @@ class PlanTests(unittest.TestCase):
 
     def assert_plan(self, items, expected, next_ids):
         report = self.plan(items)
-        self.assertEqual({item["id"]: item["state"] for item in report["items"]}, expected)
+        self.assertEqual(
+            {item["id"]: item["state"] for item in report["items"]}, expected
+        )
         self.assertCountEqual(report["next"], next_ids)
-        self.assertIs(report["complete"], all(state == "VERIFIED" for state in expected.values()))
+        self.assertIs(
+            report["complete"], all(state == "VERIFIED" for state in expected.values())
+        )
 
     def test_verified_descendant_waits_again_when_ancestor_changes(self):
         api = {"id": "api", "task": "api", "run": self.verified("api")}
-        client = {"id": "client", "task": "client", "needs": ["api"], "run": self.verified("client")}
+        client = {
+            "id": "client",
+            "task": "client",
+            "needs": ["api"],
+            "run": self.verified("client"),
+        }
         items = [
-            {"id": "release", "task": "release", "needs": ["client"]}, client, api,
+            {"id": "release", "task": "release", "needs": ["client"]},
+            client,
+            api,
             {"id": "docs", "task": "docs"},
         ]
-        stale_input = dict(api="VERIFIED", client="ATTENTION", release="WAITING", docs="READY")
+        stale_input = dict(
+            api="VERIFIED", client="ATTENTION", release="WAITING", docs="READY"
+        )
         current = dict(api="VERIFIED", client="VERIFIED", release="READY", docs="READY")
         self.assert_plan(items, stale_input, ["client", "docs"])
         client["inputs"] = {"api": self.cli("status", api["run"])["subject"]}
@@ -66,7 +95,8 @@ class PlanTests(unittest.TestCase):
         api_schema = self.root / "api" / "schema"
         api_schema.write_text("v2")
         self.assert_plan(
-            items, dict(api="ATTENTION", client="WAITING", release="WAITING", docs="READY"),
+            items,
+            dict(api="ATTENTION", client="WAITING", release="WAITING", docs="READY"),
             ["api", "docs"],
         )
         new_subject = self.cli("check", api["run"])["subject"]
@@ -79,7 +109,7 @@ class PlanTests(unittest.TestCase):
 
     def test_unavailable_receipts_leave_independent_work_ready(self):
         api = self.verified("api")
-        lock, = (self.state / "locks").iterdir()
+        (lock,) = (self.state / "locks").iterdir()
         (self.root / "git").mkdir()
         subprocess.run(["git", "init", "-q", self.root / "git"], check=True)
         items = [
@@ -94,9 +124,42 @@ class PlanTests(unittest.TestCase):
             fcntl.flock(handle, fcntl.LOCK_EX)
             self.assert_plan(
                 items,
-                dict(api="ATTENTION", git="ATTENTION", missing="ATTENTION", release="WAITING", docs="READY"),
+                dict(
+                    api="ATTENTION",
+                    git="ATTENTION",
+                    missing="ATTENTION",
+                    release="WAITING",
+                    docs="READY",
+                ),
                 ["api", "git", "missing", "docs"],
             )
+
+    def test_removed_empty_workspace_reopens_a_verified_item(self):
+        repo = self.root / "empty"
+        repo.mkdir()
+        self.contract.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "empty",
+                        "expect": "workspace has no files",
+                        "argv": [
+                            sys.executable,
+                            "-c",
+                            "import os; assert not os.listdir()",
+                        ],
+                    }
+                ]
+            )
+        )
+        run = self.cli(
+            "start", "--repo", repo, "--task", "inspect", "--contract", self.contract
+        )["run"]
+        self.cli("check", run)
+        item = {"id": "inspect", "task": "inspect", "run": run}
+        self.assert_plan([item], {"inspect": "VERIFIED"}, [])
+        repo.rmdir()
+        self.assert_plan([item], {"inspect": "ATTENTION"}, ["inspect"])
 
     def test_matching_task_is_required_to_finish(self):
         item = {"id": "api", "task": "another task", "run": self.verified("api")}
@@ -108,9 +171,13 @@ class PlanTests(unittest.TestCase):
         a = {"id": "a", "task": "Build A"}
         for items in (
             [{**a, "run": "a" * 32}, {"id": "b", "task": "B", "run": "a" * 32}],
-            [], [a, a], [{**a, "needs": ["unknown"]}], [{**a, "needs": "b"}],
+            [],
+            [a, a],
+            [{**a, "needs": ["unknown"]}],
+            [{**a, "needs": "b"}],
             [{**a, "needs": ["b", "b"]}, {"id": "b", "task": "Build B"}],
-            [{**a, "inputs": {}}], [{**a, "run": "a" * 32, "inputs": {"b": "subject"}}],
+            [{**a, "inputs": {}}],
+            [{**a, "run": "a" * 32, "inputs": {"b": "subject"}}],
             [{**a, "needs": ["b"]}, {"id": "b", "task": "Build B", "needs": ["a"]}],
         ):
             with self.subTest(items=items):
