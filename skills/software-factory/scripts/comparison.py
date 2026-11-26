@@ -1,5 +1,6 @@
 import argparse
 import hashlib
+import os
 from pathlib import Path
 from statistics import median
 import subprocess
@@ -14,7 +15,7 @@ def sample(directory, argv):
             argv, cwd=directory, stdin=subprocess.DEVNULL, stdout=output, stderr=errors
         )
         elapsed = (time.monotonic_ns() - started) / 1_000_000
-        size = output.tell()
+        size = os.fstat(output.fileno()).st_size
         output.seek(0)
         row = dict(
             elapsed_ms=elapsed,
@@ -23,8 +24,8 @@ def sample(directory, argv):
             stdout_sha256=hashlib.file_digest(output, "sha256").hexdigest(),
         )
         if result.returncode:
-            errors.seek(max(0, errors.tell() - 4096))
-            row["stderr_tail"] = errors.read().decode(errors="replace")
+            errors.seek(max(0, os.fstat(errors.fileno()).st_size - 4096))
+            row["stderr_tail"] = errors.read(4096).decode(errors="replace")
         return row
 
 
@@ -51,7 +52,17 @@ def compare(args):
     for trial in range(args.trials):
         order = ("after", "before") if trial % 2 else ("before", "after")
         for side in order:
-            row = dict(side=side, trial=trial + 1, **sample(directories[side], argv))
+            try:
+                measurement = sample(directories[side], argv)
+            except OSError as error:
+                return dict(
+                    **report,
+                    status="BLOCKED",
+                    side=side,
+                    trial=trial + 1,
+                    error=str(error),
+                ), 2
+            row = dict(side=side, trial=trial + 1, **measurement)
             rows.append(row)
             if row["returncode"]:
                 return dict(**report, status="COMMAND_FAILED"), 1
