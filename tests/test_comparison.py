@@ -42,7 +42,7 @@ class ComparisonTests(unittest.TestCase):
         return json.loads(result.stdout)
 
     def test_replay_measures_only_matching_successful_work(self):
-        caller = "import os; os.write(1, open('output','rb').read()); os.lseek(1, 0, 0)"
+        caller = "import sys; sys.stdout.buffer.write(open('output','rb').read())"
         report = self.compare(0, sys.executable, "-c", caller)
         self.assertEqual(report["status"], "MATCH")
         self.assertEqual(
@@ -57,7 +57,6 @@ class ComparisonTests(unittest.TestCase):
                 dict(min=min(samples), median=median(samples), max=max(samples)),
             )
         self.assertEqual(set(report["elapsed_ms"]), {"before", "after"})
-        caller = "import sys; sys.stdout.buffer.write(open('output','rb').read())"
         (self.after / "output").write_bytes(b"\xfe\x00")
         report = self.compare(1, sys.executable, "-c", caller)
         self.assertEqual(report["status"], "OUTPUT_CHANGED")
