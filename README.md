@@ -11,7 +11,7 @@ Today, Factory is an installable agent skill and a local CLI. The skill reads yo
 | Fix a bug or build a change | Confirm the behavior through a real entry point, make the change, and show what happens afterward. |
 | Diagnose a stall or slow operation | Collect a live trace or analyze the one you supply, identify the cause, and measure a repair when requested. |
 | Try a design or match a reference UI | Build a disposable prototype to settle the decision, or render both versions to check visual parity. |
-| Refactor a command or speed it up | Replay the same workload in two checkouts and compare its output and elapsed time. |
+| Compare two implementations of a command | Replay the same workload in two checkouts and compare its output and elapsed time. |
 | Deliver a stack of PRs | Check each parent and child, follow CI and review feedback, and land eligible changes when asked. |
 | Decide between designs or diagnose a hard problem | Have two models investigate independently, then compare the evidence behind their conclusions. |
 | Simplify a branch | Give fresh model sessions the branch, its constraints, and the checks it must pass. |

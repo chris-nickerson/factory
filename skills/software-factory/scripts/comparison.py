@@ -1,31 +1,57 @@
 import argparse
 import hashlib
-import os
+import json
 from pathlib import Path
 from statistics import median
 import subprocess
+import sys
 import tempfile
 import time
 
+from supervision import ProcessError, captured_process
 
-def sample(directory, argv):
-    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+
+def measure(directory, argv):
+    with (
+        (directory / "stdout").open("wb") as output,
+        (directory / "stderr").open("wb") as errors,
+    ):
         started = time.monotonic_ns()
-        result = subprocess.run(
-            argv, cwd=directory, stdin=subprocess.DEVNULL, stdout=output, stderr=errors
-        )
+        try:
+            result = subprocess.run(
+                argv, stdin=subprocess.DEVNULL, stdout=output, stderr=errors
+            )
+        except OSError as error:
+            print(json.dumps({"error": str(error)}))
+            return
         elapsed = (time.monotonic_ns() - started) / 1_000_000
-        size = os.fstat(output.fileno()).st_size
-        output.seek(0)
-        row = dict(
-            elapsed_ms=elapsed,
-            returncode=result.returncode,
-            stdout_bytes=size,
-            stdout_sha256=hashlib.file_digest(output, "sha256").hexdigest(),
+    print(json.dumps(dict(elapsed_ms=elapsed, returncode=result.returncode)))
+
+
+def sample(directory, argv, timeout):
+    with tempfile.TemporaryDirectory() as temporary:
+        files = Path(temporary)
+        result = captured_process(
+            [sys.executable, "-B", str(Path(__file__).resolve()), temporary, *argv],
+            cwd=directory,
+            timeout=timeout,
         )
         if result.returncode:
-            errors.seek(max(0, os.fstat(errors.fileno()).st_size - 4096))
-            row["stderr_tail"] = errors.read(4096).decode(errors="replace")
+            raise ProcessError(
+                result.stderr.decode(errors="replace") or "Measurement process failed"
+            )
+        row = json.loads(result.stdout)
+        if "error" in row:
+            raise ProcessError(row["error"])
+        output = files / "stdout"
+        row["stdout_bytes"] = output.stat().st_size
+        with output.open("rb") as stream:
+            row["stdout_sha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
+        if row["returncode"]:
+            errors = files / "stderr"
+            with errors.open("rb") as stream:
+                stream.seek(max(0, errors.stat().st_size - 4096))
+                row["stderr_tail"] = stream.read(4096).decode(errors="replace")
         return row
 
 
@@ -40,6 +66,8 @@ def compare(args):
         raise ValueError("Choose separate before and after directories")
     if args.trials < 1:
         raise ValueError("Expected at least one trial per checkout")
+    if args.timeout is not None and args.timeout <= 0:
+        raise ValueError("The per-sample timeout must be positive")
     argv = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
     if not argv:
         raise ValueError("Supply the command and its arguments after --")
@@ -53,8 +81,8 @@ def compare(args):
         order = ("after", "before") if trial % 2 else ("before", "after")
         for side in order:
             try:
-                measurement = sample(directories[side], argv)
-            except OSError as error:
+                measurement = sample(directories[side], argv, args.timeout)
+            except (OSError, ProcessError) as error:
                 return dict(
                     **report,
                     status="BLOCKED",
@@ -89,6 +117,13 @@ def register(sub):
         help="Pairs of runs, alternating which directory runs first",
     )
     parser.add_argument(
+        "--timeout", type=int, help="Maximum seconds per supervised sample"
+    )
+    parser.add_argument(
         "argv", nargs=argparse.REMAINDER, help="Command and arguments after --"
     )
     parser.set_defaults(action=compare)
+
+
+if __name__ == "__main__":
+    measure(Path(sys.argv[1]), sys.argv[2:])
