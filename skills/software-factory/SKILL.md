@@ -1,6 +1,6 @@
 ---
 name: software-factory
-description: Use Factory to verify engineering changes, get an independent review of a scoped diff, or get a design or diagnosis from two models that investigate independently, such as GPT and Claude. Use it to plan or resume multi-stage projects. Use it for simplification rounds sized to a PR, measured hill-climbing, dependency upgrades and advisory remediation, PR descriptions, and documentation.
+description: Use Factory to verify engineering changes, get an independent review of a scoped diff, or get a design or diagnosis from two models that investigate independently, such as GPT and Claude. Use it to diagnose live symptoms and captured traces, measure performance, compare implementations, prototype decisions, verify visual parity, and deliver PR stacks. Use it to plan or resume multi-stage projects. Use it for simplification rounds sized to a PR, measured hill-climbing, dependency upgrades and advisory remediation, PR descriptions, and documentation.
 ---
 
 # Software Factory
@@ -24,7 +24,11 @@ Use the brief to choose a workflow and guide your next actions. Pass the relevan
 | Resolve a dependency alert (including Socket) or upgrade a package | Trace the resolved package, make a compatible update, and check the actual consumer. [Dependency updates](references/dependencies.md) |
 | Hill-climb an outcome over successive experiments | Use the [hill-climbing workflow](references/hill-climbing.md) to choose the next trial and decide which change to keep. |
 | Plan, coordinate or resume work with dependencies across runs | Use [multi-stage plans](references/plans.md) and `factory plan FILE` to identify the next eligible items. Stop after presenting the plan for a planning-only request. |
-| Implement, verify, refactor, measure performance, or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
+| Diagnose a live symptom, analyze a captured profile, or fix a measured slowdown | Follow [diagnostics and performance](references/diagnostics.md). Preserve a diagnosis-only endpoint. |
+| Decide between approaches by building a prototype, or match an existing UI | Use [decision prototypes and visual parity](references/experiments.md). |
+| Refactor an implementation, or compare output or speed between two checkouts | Use [behavioral comparisons](references/comparisons.md) to capture the caller's result and replay it on both revisions. |
+| Build, babysit or land a stack of dependent PRs | Follow [stack delivery](references/stacks.md) for the requested endpoint and each PR's current base and head. |
+| Implement, verify or review a change | Use a frozen local contract and the evidence commands. [Local workflow](references/local.md) |
 | Write or revise a PR description | Use the [PR writing guide](references/pr-descriptions.md) and the target repository's template. |
 | Write, revise or clean up documentation | Use the [Factory writing guide](references/documentation.md). |
 | Deliver an implementation with independent review, locally or as a new review-ready PR | Compose consensus if requested, your implementation, the size-based simplification rounds, a fresh independent review and final behavioral checks. When a PR is requested, verify its handoff. [Full delivery](references/delivery.md) |
