@@ -271,9 +271,10 @@ def _response(directory, meta, step, actor, prompt, context, session=None):
 
 
 def _opening(meta, actor):
+    goal = meta.get("opening_goal", GOALS[meta["mode"]])
     return (
         f"You are Agent {actor.upper()}. Investigate this {meta['mode']} question independently. "
-        f"{GOALS[meta['mode']]} {PROPOSE}\n\nTask:\n{meta['task']}"
+        f"{goal} {PROPOSE}\n\nTask:\n{meta['task']}"
     )
 
 
@@ -444,6 +445,14 @@ def handle(args):
             print(roles.describe(binding), file=sys.stderr)
             for reduction in binding["reductions"]:
                 print(f"Reduced assurance: {reduction}", file=sys.stderr)
+        opening_goal = GOALS[action]
+        if action == "design":
+            opening_goal += (
+                " If a proposed safeguard or dependency pulls another subsystem into scope, "
+                "trace one affected caller through the current code and the proposed rollout. "
+                "Identify the required user outcome, whether a simpler release order meets it, "
+                "and who must decide if the requirement is unclear."
+            )
         directory.mkdir(mode=0o700, parents=True)
         _publish(
             directory / "run.json",
@@ -453,6 +462,7 @@ def handle(args):
                 "task": args.task,
                 "subject": subject,
                 "mode": action,
+                "opening_goal": opening_goal,
                 "participants": participants,
                 "exchanges": args.exchanges,
             },

@@ -106,6 +106,11 @@ class DialogueTests(unittest.TestCase):
             ["codex", "claude", "claude", "codex"], [p for p, _ in self.calls]
         )
         self.assertFalse(any(call["edit"] for _, call in self.calls))
+        opening_goal = json.loads((Path(out["artifacts"]) / "run.json").read_text())["opening_goal"]
+        self.assertIn("simpler release order", opening_goal)
+        for _, call in self.calls[:2]:
+            self.assertIn(opening_goal, call["prompt"])
+        self.assertNotIn(opening_goal, self.calls[2][1]["prompt"])
         self.assertNotIn(OPEN, self.calls[1][1]["prompt"])
         self.assertIn("secret independent B report", self.calls[3][1]["prompt"])
         self.assertEqual(
@@ -266,6 +271,8 @@ class DialogueTests(unittest.TestCase):
         code, report = self.invoke(
             "diagnosis", "--repo", str(self.repo), "--task", "Find the actual cause"
         )
+        for _, call in self.calls[:2]:
+            self.assertNotIn("simpler release order", call["prompt"])
         self.assertEqual(
             (0, "confirmed", "INCONCLUSIVE"),
             (code, report["status"], report["disposition"]),
