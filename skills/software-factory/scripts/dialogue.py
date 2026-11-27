@@ -20,7 +20,10 @@ from workspace import repo_root, snapshot, state_root, workspace_lock, write_jso
 
 HARNESSES_BEFORE_PARTICIPANTS = {"a": "codex", "b": "claude"}
 GOALS = {
-    "design": "Compare viable designs against the actual requirements. State the tradeoff, "
+    "design": "Compare viable designs against the actual requirements. If a proposed safeguard or "
+    "dependency pulls another subsystem into scope, trace one affected caller through the current "
+    "code and the proposed rollout. Identify the required user outcome, whether a simpler release "
+    "order meets it, and who must decide if the requirement is unclear. State the tradeoff, "
     "your strongest alternative, acceptance cases and what would change your choice.",
     "diagnosis": "Distinguish observations from theories. Connect cause to symptom, test a competing "
     "mechanism, and give evidence or the smallest experiment that could resolve doubt. "
